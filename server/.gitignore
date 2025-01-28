@@ -9,8 +9,11 @@ server/pyvenv.cfg
 __pycache__/
 
 # Large data files and directories
-server/fma_metadata/
 fma_metadata/
+lib/
+share/
+bin/
+include/
 *.csv
 *.zip
 
