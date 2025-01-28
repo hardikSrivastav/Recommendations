@@ -29,20 +29,34 @@ out/
 *.flac
 *.aac
 *.m4a
+
+# Large data files
 *.csv
 *.zip
+*.dylib
+fma_metadata/
+server/fma_metadata/
+
+# Python virtual environment
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Project-specific
 uploads/
 temp/
 cache/
-server/lib/*
-server/share/*
-server/fma_metadata/
 server/lib/
 server/share/
+server/bin/
+server/include/
 server/pyvenv.cfg
-server/bin
+server/lib/python3.8/
+server/lib/python*/
+site-packages/
 
 # System files
 .DS_Store
