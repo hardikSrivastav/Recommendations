@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+vendor/
+bower_components/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Build and distribution
+dist/
+build/
+out/
+*.log
+
+# Audio files
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.aac
+*.m4a
+
+# Project-specific
+uploads/
+temp/
+cache/
+
+# System files
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
