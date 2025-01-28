@@ -1,0 +1,30 @@
+# Python virtual environment
+venv/
+env/
+server/lib/
+server/bin/
+server/include/
+server/pyvenv.cfg
+*.pyc
+__pycache__/
+
+# Large data files and directories
+server/fma_metadata/
+fma_metadata/
+*.csv
+*.zip
+
+# System libraries and binaries
+*.dylib
+*.so
+*.dll
+
+# Dependencies
+server/lib/python3.8/
+server/lib/python*/
+site-packages/
+
+# Temporary and cache files
+*.log
+.DS_Store
+.cache/ 

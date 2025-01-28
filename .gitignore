@@ -29,6 +29,8 @@ out/
 *.flac
 *.aac
 *.m4a
+*.csv
+*.zip
 
 # Project-specific
 uploads/
