@@ -36,7 +36,6 @@ temp/
 cache/
 server/lib/*
 server/share/*
-fma_metadata/
 server/fma_metadata/
 server/lib/
 server/share/
