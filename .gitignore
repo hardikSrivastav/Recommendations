@@ -37,6 +37,7 @@ cache/
 server/lib/*
 server/share/*
 fma_metadata/
+server/fma_metadata/
 
 # System files
 .DS_Store
