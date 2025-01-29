@@ -1,5 +1,4 @@
 import { Inter } from "next/font/google"
-import "@/styles/globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -9,7 +8,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className={`${inter.className} antialiased`}>
+    <div className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}>
       {children}
     </div>
   );

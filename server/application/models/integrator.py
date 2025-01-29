@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import torch
 from datetime import datetime
-from fma_dataset_processor import FMADatasetProcessor 
-from model import RecommenderSystem
+from application.models.fma_dataset_processor import FMADatasetProcessor 
+from application.models.model import RecommenderSystem
 import logging
 
 class IntegratedMusicRecommender:
