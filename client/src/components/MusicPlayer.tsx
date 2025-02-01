@@ -2,36 +2,33 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 
 interface Song {
-  id: string;
-  title: string;
-  artist: string;
-  url: string;
+  id: number;
+  track_title: string;
+  artist_name: string;
+  album_title: string;
 }
 
 interface MusicPlayerProps {
   song: Song;
-  onPlayComplete: (songId: string) => void;
 }
 
-export function MusicPlayer({ song, onPlayComplete }: MusicPlayerProps) {
+export function MusicPlayer({ song }: MusicPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handlePlay = () => {
     setIsPlaying(true);
-    // POST to /history (to be implemented)
-    // Log listening event
   };
 
   const handleComplete = () => {
     setIsPlaying(false);
-    onPlayComplete(song.id);
   };
 
   return (
     <div className="flex flex-col items-center space-y-4 p-6 border rounded-lg">
       <div className="text-center">
-        <h3 className="text-lg font-semibold">{song.title}</h3>
-        <p className="text-sm text-gray-500">{song.artist}</p>
+        <h3 className="text-lg font-semibold">{song.track_title}</h3>
+        <p className="text-sm text-gray-500">{song.artist_name}</p>
+        <p className="text-xs text-gray-400">{song.album_title}</p>
       </div>
 
       <div className="flex space-x-4">

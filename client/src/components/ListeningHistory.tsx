@@ -1,12 +1,4 @@
-import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
-
-interface Song {
-  track_title: string;
-  artist_name: string;
-  album_title: string;
-  id: number;
-}
+import { SongCard, type Song } from "./SongCard";
 
 interface ListeningHistoryProps {
   songs: Song[];
@@ -14,46 +6,29 @@ interface ListeningHistoryProps {
 }
 
 export function ListeningHistory({ songs, onRemove }: ListeningHistoryProps) {
-  if (songs.length === 0) {
+  if (!songs.length) {
     return (
-      <div className="w-full p-8 text-center rounded-lg bg-background/80">
-        <p className="text-lg text-gray-300">
-          No songs in your listening history yet.
-          <br />
-          Search and add songs to start tracking your music journey!
+      <div className="text-center py-8">
+        <h2 className="text-2xl font-semibold text-white mb-2">Listening History</h2>
+        <p className="text-gray-400">
+          Your listening history will appear here once you start adding songs.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-white">Your Listening History</h2>
-        <span className="text-base text-gray-300">{songs.length} songs</span>
-      </div>
-      
+    <div className="space-y-4">
+      <h2 className="text-2xl font-semibold text-white">Listening History</h2>
       <div className="space-y-3">
         {songs.map((song) => (
-          <div
+          <SongCard
             key={song.id}
-            className="flex items-center justify-between p-5 rounded-lg bg-background/80 hover:bg-background/60 transition-colors group"
-          >
-            <div>
-              <h3 className="text-lg font-medium text-white">{song.track_title}</h3>
-              <p className="text-base text-gray-300">
-                {song.artist_name} • {song.album_title}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => onRemove(song.id)}
-            >
-              <Trash2 className="h-5 w-5" />
-            </Button>
-          </div>
+            song={song}
+            onAction={() => onRemove(song.id)}
+            actionLabel="Remove"
+            isCompact
+          />
         ))}
       </div>
     </div>

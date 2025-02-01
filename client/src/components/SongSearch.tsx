@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Music2, AlertCircle } from "lucide-react";
+import { musicAPI } from "@/services/api";
+import { SongCard, type Song } from "./SongCard";
+import { cn } from "@/lib/utils";
+import debounce from "lodash/debounce";
 
-interface Song {
-  track_title: string;
-  artist_name: string;
-  album_title: string;
-  id: number;
+interface SearchResponse {
+  results: Song[];
+  total_results: number;
+  limit: number;
+  query: string;
 }
 
 interface SongSearchProps {
@@ -17,73 +21,120 @@ interface SongSearchProps {
 export function SongSearch({ onAddToHistory }: SongSearchProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [songs, setSongs] = useState<Song[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/songs/search?q=${encodeURIComponent(searchQuery)}`);
-      const data = await response.json();
-      setSongs(data);
-    } catch (error) {
-      console.error("Failed to search songs:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce(async (query: string) => {
+      if (!query.trim()) {
+        setSongs([]);
+        setTotalResults(0);
+        setHasSearched(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      setHasSearched(true);
+      
+      try {
+        const response = await musicAPI.search(query);
+        const data = response.data as SearchResponse;
+        setSongs(data.results || []);
+        setTotalResults(data.total_results || 0);
+      } catch (error) {
+        console.error("Failed to search songs:", error);
+        setError("Failed to search songs");
+      } finally {
+        setIsLoading(false);
+      }
+    }, 200),
+    []
+  );
+
+  useEffect(() => {
+    debouncedSearch(searchQuery);
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [searchQuery, debouncedSearch]);
 
   return (
-    <div className="w-full space-y-6">
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+    <div className="h-full flex flex-col">
+      <div className="flex-none pb-4">
+        <div className="relative">
           <Input
             type="text"
             placeholder="Search for songs..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="pl-12 py-6 text-lg bg-background/80"
+            className={cn(
+              "pl-12 py-4 text-base",
+              "bg-background/80 backdrop-blur-sm",
+              "border-white/10 focus:border-primary/50",
+              "transition-all duration-300",
+              "placeholder:text-gray-500"
+            )}
           />
-          <Search className="absolute left-4 top-4 h-5 w-5 text-gray-400" />
+          <Search className="absolute left-4 top-2 h-5 w-5 text-gray-400" />
         </div>
-        <Button 
-          onClick={handleSearch} 
-          disabled={isLoading}
-          className="px-8 py-6 text-lg"
-          size="lg"
-        >
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            "Search"
-          )}
-        </Button>
       </div>
 
-      <div className="space-y-3">
-        {songs.map((song) => (
-          <div
-            key={song.id}
-            className="flex items-center justify-between p-5 rounded-lg bg-background/80 hover:bg-background/60 transition-colors"
-          >
-            <div>
-              <h3 className="text-lg font-medium text-white">{song.track_title}</h3>
-              <p className="text-base text-gray-300">
-                {song.artist_name} • {song.album_title}
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => onAddToHistory(song)}
-              className="ml-4 text-base"
-            >
-              Add to History
-            </Button>
+      <div className="flex-1 overflow-hidden relative">
+        {isLoading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary/60" />
+            <p className="text-sm text-gray-400">Searching for "{searchQuery}"...</p>
           </div>
-        ))}
+        ) : error ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <AlertCircle className="h-6 w-6 text-red-400" />
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        ) : !hasSearched ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <Music2 className="h-8 w-8 text-gray-500/50" />
+            <p className="text-center text-sm">
+              Start typing to search for songs<br />
+              <span className="text-xs text-gray-500">Results will appear as you type</span>
+            </p>
+          </div>
+        ) : songs.length === 0 ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <Music2 className="h-6 w-6 text-gray-500/50" />
+            <p className="text-center text-sm">
+              No songs found for "{searchQuery}"<br />
+              <span className="text-xs text-gray-500">Try a different search term</span>
+            </p>
+          </div>
+        ) : (
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400 sticky top-0 backdrop-blur-sm py-2 z-10">
+                Showing top {songs.length} of {totalResults} song{totalResults !== 1 ? 's' : ''} for "{searchQuery}"
+              </p>
+              <div className="space-y-2">
+                {songs.map((song) => (
+                  <SongCard
+                    key={song.id}
+                    song={song}
+                    onAction={onAddToHistory}
+                    actionLabel="Add to History"
+                    isCompact
+                  />
+                ))}
+              </div>
+              {totalResults > songs.length && (
+                <p className="text-xs text-gray-500 text-center py-2">
+                  {totalResults - songs.length} more result{totalResults - songs.length !== 1 ? 's' : ''} available
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

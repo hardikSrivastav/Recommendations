@@ -7,12 +7,241 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 import pickle
 import logging
+from typing import Dict, List, Any, Optional
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+class ConfidenceCalculator:
+    """Calculates confidence scores for predictions based on multiple factors."""
+    
+    def __init__(self):
+        self.history_weight = 0.4  # Weight for user history length
+        self.embedding_weight = 0.3  # Weight for embedding similarity
+        self.diversity_weight = 0.3  # Weight for prediction diversity
+        
+    def calculate_confidence(
+        self,
+        predictions: Dict[str, float],
+        pred_type: str,
+        user_context: Dict[str, Any]
+    ) -> float:
+        """
+        Calculate confidence score for a set of predictions.
+        
+        Mathematical formulation:
+        confidence = w_h * f_h + w_e * f_e + w_d * f_d
+        where:
+        - w_h, w_e, w_d are weights for history, embedding, and diversity
+        - f_h = min(1, log(1 + history_length) / log(50))  # Normalized history factor
+        - f_e = cosine_similarity(user_embedding, song_embedding)
+        - f_d = 1 - (std(prediction_scores) / max_possible_std)  # Diversity factor
+        """
+        history_factor = self._calculate_history_factor(user_context.get('history_length', 0))
+        embedding_factor = self._calculate_embedding_factor(predictions, user_context)
+        diversity_factor = self._calculate_diversity_factor(predictions)
+        
+        confidence = (
+            self.history_weight * history_factor +
+            self.embedding_weight * embedding_factor +
+            self.diversity_weight * diversity_factor
+        )
+        
+        return min(1.0, max(0.0, confidence))
+    
+    def _calculate_history_factor(self, history_length: int) -> float:
+        """
+        Calculate confidence factor based on user history length.
+        Uses logarithmic scaling to handle varying history lengths.
+        """
+        return min(1.0, np.log1p(history_length) / np.log(50))
+    
+    def _calculate_embedding_factor(
+        self,
+        predictions: Dict[str, float],
+        user_context: Dict[str, Any]
+    ) -> float:
+        """
+        Calculate confidence factor based on embedding similarity.
+        Uses normalized cosine similarity between user and song embeddings.
+        
+        Mathematical formulation:
+        1. Normalize embeddings: e_norm = e / ||e||
+        2. Calculate cosine similarity: cos_sim = (u_norm · s_norm)
+        3. Scale to [0,1]: similarity = (cos_sim + 1) / 2
+        where:
+        - e is the embedding vector
+        - ||e|| is the L2 norm of the vector
+        - u_norm is the normalized user embedding
+        - s_norm is the normalized song embedding
+        - · represents dot product
+        """
+        if 'user_embedding' not in user_context:
+            return 0.5  # Default if no embedding available
+            
+        similarities = []
+        for song_id in predictions:
+            if 'song_embeddings' in user_context and song_id in user_context['song_embeddings']:
+                user_emb = user_context['user_embedding']
+                song_emb = user_context['song_embeddings'][song_id]
+                
+                # Normalize embeddings
+                user_emb_norm = user_emb / torch.norm(user_emb)
+                song_emb_norm = song_emb / torch.norm(song_emb)
+                
+                # Calculate cosine similarity and scale to [0,1]
+                similarity = torch.cosine_similarity(
+                    user_emb_norm.unsqueeze(0),
+                    song_emb_norm.unsqueeze(0)
+                ).item()
+                
+                # Scale from [-1,1] to [0,1]
+                scaled_similarity = (similarity + 1) / 2
+                similarities.append(scaled_similarity)
+                
+        return np.mean(similarities) if similarities else 0.5
+    
+    def _calculate_diversity_factor(self, predictions: Dict[str, float]) -> float:
+        """
+        Calculate confidence factor based on prediction diversity.
+        Uses standard deviation of prediction scores normalized by maximum possible std.
+        """
+        scores = list(predictions.values())
+        if not scores:
+            return 0.5
+            
+        std = np.std(scores)
+        max_possible_std = 0.5  # Maximum possible std for scores in [0,1]
+        return 1 - (std / max_possible_std)  # Higher diversity -> lower confidence
+
+class WeightedEnsembleRecommender:
+    """
+    Handles dynamic weighting of different recommendation sources based on 
+    confidence scores and user context.
+    
+    Mathematical formulation for final scores:
+    score(song_i) = Σ(w_j * s_ij) for j in prediction_sources
+    where:
+    - w_j is the weight for prediction source j
+    - s_ij is the score for song i from source j
+    - weights w_j are normalized confidence scores: w_j = conf_j / Σ(conf_k)
+    """
+    
+    def __init__(self):
+        self.confidence_calculator = ConfidenceCalculator()
+        self.prediction_sources = {
+            'model': None,  # Will be set to MusicRecommender instance
+            'demographic': None,  # Will be implemented
+            'popularity': None  # Will be implemented
+        }
+        
+    def set_model_predictor(self, model_predictor: 'MusicRecommender'):
+        """Set the main model predictor."""
+        self.prediction_sources['model'] = model_predictor
+        
+    async def get_recommendations(
+        self,
+        user_id: str,
+        user_context: Dict[str, Any],
+        n: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Get weighted recommendations from all available sources.
+        
+        Process:
+        1. Get predictions from each source
+        2. Calculate confidence scores
+        3. Blend predictions using dynamic weights
+        4. Return top N recommendations with metadata
+        """
+        predictions = {}
+        confidence_scores = {}
+        
+        # Get predictions from each source
+        for source_name, predictor in self.prediction_sources.items():
+            if predictor is not None:
+                try:
+                    preds = await self._get_source_predictions(predictor, user_id, user_context)
+                    confidence = self.confidence_calculator.calculate_confidence(
+                        preds,
+                        source_name,
+                        user_context
+                    )
+                    predictions[source_name] = preds
+                    confidence_scores[source_name] = confidence
+                except Exception as e:
+                    logging.error(f"Error getting predictions from {source_name}: {str(e)}")
+                    
+        # Blend predictions
+        blended_scores = self._blend_predictions(predictions, confidence_scores)
+        
+        # Get top N recommendations
+        top_n = sorted(
+            blended_scores.items(),
+            key=lambda x: x[1]['score'],
+            reverse=True
+        )[:n]
+        
+        return [{
+            'song_id': song_id,
+            'score': data['score'],
+            'confidence': data['confidence'],
+            'source_weights': data['source_weights']
+        } for song_id, data in top_n]
+    
+    async def _get_source_predictions(
+        self,
+        predictor: Any,
+        user_id: str,
+        user_context: Dict[str, Any]
+    ) -> Dict[str, float]:
+        """Get predictions from a single source."""
+        if hasattr(predictor, 'predict_async'):
+            return await predictor.predict_async(user_id, user_context)
+        return predictor.predict(user_id, user_context)
+    
+    def _blend_predictions(
+        self,
+        predictions: Dict[str, Dict[str, float]],
+        confidence_scores: Dict[str, float]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Blend predictions from multiple sources using confidence scores as weights.
+        
+        Mathematical process:
+        1. Normalize confidence scores to get weights:
+           w_j = conf_j / Σ(conf_k)
+        2. For each song, calculate weighted score:
+           score_i = Σ(w_j * s_ij)
+        3. Calculate final confidence as weighted average of source confidences
+        """
+        # Calculate normalized weights
+        total_confidence = sum(confidence_scores.values())
+        weights = {
+            source: score / total_confidence
+            for source, score in confidence_scores.items()
+        }
+        
+        # Blend scores
+        blended_scores = defaultdict(lambda: {
+            'score': 0.0,
+            'confidence': 0.0,
+            'source_weights': {}
+        })
+        
+        # Calculate weighted scores and track source contributions
+        for source, preds in predictions.items():
+            source_weight = weights[source]
+            for song_id, score in preds.items():
+                blended_scores[song_id]['score'] += score * source_weight
+                blended_scores[song_id]['confidence'] += confidence_scores[source] * source_weight
+                blended_scores[song_id]['source_weights'][source] = source_weight
+                
+        return blended_scores
 
 class MusicRecommender(nn.Module):
     def __init__(self, num_users, num_songs, embedding_dim, metadata_dim, demographic_dim):
@@ -31,11 +260,11 @@ class MusicRecommender(nn.Module):
         '''
         total_input_dim = embedding_dim * 2 + metadata_dim + demographic_dim
         
-        # Fully connected (FC) layers for combining embeddings and metadata; each neural network node (neuron) in layer n is connected to every node in layer n-1
+        # Fully connected (FC) layers for combining embeddings and metadata
         self.fc1 = nn.Linear(total_input_dim, 256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, 64)
-        self.output = nn.Linear(64, 1)
+        self.output = nn.Linear(64, 2)  # Changed to output [score, confidence]
         
         # Store dimensions for debugging
         self.embedding_dim = embedding_dim
@@ -43,6 +272,20 @@ class MusicRecommender(nn.Module):
         self.demographic_dim = demographic_dim
 
     def forward(self, user_input, song_input, metadata_input, demographic_input):
+        """
+        Forward pass with confidence score calculation.
+        Returns both prediction score and model's confidence.
+        
+        Mathematical formulation:
+        1. Embedding concatenation: E = [E_user; E_song; M; D]
+        2. Forward propagation: h_i = ReLU(W_i * h_{i-1} + b_i)
+        3. Output: [score, confidence] = sigmoid(W_out * h_3 + b_out)
+        where:
+        - E_user, E_song are embedding vectors
+        - M is metadata vector
+        - D is demographic vector
+        - h_i are hidden layer outputs
+        """
         metadata_input = torch.nan_to_num(metadata_input, 0.0)
         demographic_input = torch.nan_to_num(demographic_input, 0.0) # If values are NaN, replace with 0
         user_embedded = self.user_embedding(user_input)
@@ -90,7 +333,19 @@ class MusicRecommender(nn.Module):
         x = torch.relu(self.fc1(combined))
         x = torch.relu(self.fc2(x))
         x = torch.relu(self.fc3(x))
-        return torch.sigmoid(self.output(x))
+        output = torch.sigmoid(self.output(x))
+        
+        # Split output into score and confidence
+        score, confidence = output.split(1, dim=1)
+        return score.squeeze(), confidence.squeeze()
+
+    def get_user_embedding(self, user_input):
+        """Get user embedding for a given user input."""
+        return self.user_embedding(user_input)
+
+    def get_song_embedding(self, song_input):
+        """Get song embedding for a given song input."""
+        return self.song_embedding(song_input)
 
 class RecommenderSystem:
     def __init__(self, embedding_dim=50, metadata_dim=10, demographic_dim=4):
@@ -107,7 +362,108 @@ class RecommenderSystem:
             'occupation': LabelEncoder()
         }
         self.model = None
-    
+        self.ensemble = WeightedEnsembleRecommender()
+        self.confidence_weight = 0.3  # Weight for confidence loss
+
+    def get_user_context(self, user_id: str, demographics_df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Get user context including history length, embeddings, and demographics.
+        This context is used for confidence calculation and prediction blending.
+        """
+        try:
+            context = {
+                'user_id': user_id,
+                'history_length': 0,  # Will be updated when history is available
+                'demographics': {},
+                'song_embeddings': {}  # Will store song embeddings for similarity calculation
+            }
+            
+            # Add demographic information
+            if user_id in demographics_df['user_id'].values:
+                user_demographics = demographics_df[demographics_df['user_id'] == user_id].iloc[0]
+                context['demographics'] = {
+                    'age_group': user_demographics['age_group_encoded'],
+                    'gender': user_demographics['gender_encoded'],
+                    'location': user_demographics['location_encoded'],
+                    'occupation': user_demographics['occupation_encoded']
+                }
+                
+            # Add embeddings if model is trained
+            if self.model is not None:
+                user_encoded = self.user_encoder.transform([user_id])[0]
+                user_input = torch.tensor([user_encoded])
+                with torch.no_grad():
+                    context['user_embedding'] = self.model.get_user_embedding(user_input).squeeze()
+                    
+                    # Pre-compute song embeddings for all songs
+                    all_songs = torch.arange(len(self.song_encoder.classes_))
+                    song_embeddings = self.model.get_song_embedding(all_songs)
+                    context['song_embeddings'] = {
+                        str(i): emb for i, emb in enumerate(song_embeddings)
+                    }
+                    
+            return context
+        except Exception as e:
+            logging.error(f"Error getting user context for {user_id}: {str(e)}")
+            raise
+
+    async def predict_next_songs(self, user_id: str, track_data: pd.DataFrame, demographics_df: pd.DataFrame, n: int = 5) -> List[Dict[str, Any]]:
+        """
+        Predict next songs using the ensemble system.
+        Returns recommendations with confidence scores and source weights.
+        
+        Args:
+            user_id: The ID of the user to generate recommendations for
+            track_data: DataFrame containing track metadata
+            demographics_df: DataFrame containing user demographics
+            n: Number of recommendations to return
+
+        Returns:
+            List of dictionaries containing song details, scores, and confidence values
+        
+        Raises:
+            ValueError: If model is not trained
+            KeyError: If user_id not found in demographics
+            Exception: For other unexpected errors
+        """
+        if not hasattr(self, 'model') or self.model is None:
+            raise ValueError("Model needs to be trained first")
+            
+        try:
+            # Get user context
+            user_context = self.get_user_context(user_id, demographics_df)
+            
+            # Set up ensemble
+            self.ensemble.set_model_predictor(self.model)
+            
+            # Get recommendations from ensemble
+            recommendations = await self.ensemble.get_recommendations(
+                user_id,
+                user_context,
+                n=n
+            )
+            
+            # Format recommendations with track details
+            detailed_recommendations = []
+            for rec in recommendations:
+                track_id = self.song_encoder.inverse_transform([int(rec['song_id'])])[0]
+                track = track_data.loc[track_id]
+                detailed_recommendations.append({
+                    'song': f"{track['track_title']} - {track['artist_name']}",
+                    'score': float(rec['score']),
+                    'confidence': float(rec['confidence']),
+                    'source_weights': rec['source_weights']
+                })
+                
+            return detailed_recommendations
+            
+        except KeyError as e:
+            logging.error(f"User {user_id} not found in demographics data: {str(e)}")
+            raise
+        except Exception as e:
+            logging.error(f"Error generating predictions for user {user_id}: {str(e)}")
+            raise
+
     def encode_demographics(self, demographics_df):
         """Encode demographic features"""
         encoded_df = demographics_df.copy()
@@ -250,13 +606,45 @@ class RecommenderSystem:
                 torch.tensor(demographics, dtype=torch.float32),
                 torch.tensor(labels, dtype=torch.float32))
 
+    def _calculate_combined_loss(self, predictions: torch.Tensor, confidence: torch.Tensor, 
+                               labels: torch.Tensor) -> torch.Tensor:
+        """
+        Calculate combined loss incorporating both prediction accuracy and confidence.
+        
+        Mathematical formulation:
+        L = (1 - w) * BCE(pred, label) + w * L_conf
+        where:
+        - w is the confidence weight
+        - BCE is binary cross entropy
+        - L_conf = |conf - acc| where acc is 1 if pred matches label, 0 otherwise
+        """
+        # Calculate prediction loss (BCE)
+        criterion = nn.BCELoss()
+        pred_loss = criterion(predictions, labels)
+        
+        # Calculate accuracy for each prediction
+        with torch.no_grad():
+            accuracy = (predictions.round() == labels).float()
+        
+        # Calculate confidence loss (how well confidence predicts accuracy)
+        conf_loss = torch.abs(confidence - accuracy).mean()
+        
+        # Combine losses
+        total_loss = (1 - self.confidence_weight) * pred_loss + self.confidence_weight * conf_loss
+        
+        return total_loss
+
     def fit(self, listening_history, song_metadata, demographics_df, epochs=10, batch_size=64):
-        """Train the model."""
+        """
+        Train the model with enhanced monitoring and confidence calculation.
+        
+        The training process now optimizes for both prediction accuracy and 
+        confidence estimation using a combined loss function.
+        """
         processed_data, processed_metadata, processed_demographics = self.preprocess_data(
             listening_history, song_metadata, demographics_df
         )
         
-        # Important: We need to reindex song_metadata to match the encoded values
         processed_metadata.index = range(len(processed_metadata))
         
         num_users = len(self.user_encoder.classes_)
@@ -272,14 +660,12 @@ class RecommenderSystem:
             self.demographic_dim
         )
         optimizer = optim.Adam(self.model.parameters(), lr=0.001)
-        criterion = nn.BCELoss() # Gives 0 or 1; loss is low for true positives (TPs) & TNs, high for FPs and FNs 
 
-        # Generate training data 
         users, songs, metadata, demographics, labels = self.generate_training_data(
             processed_data, processed_metadata, processed_demographics
         )
 
-        # Split into train and validation sets
+        # Split data into training and validation sets
         train_size = int(0.8 * len(users))
         indices = np.arange(len(users))
         np.random.shuffle(indices) # Breaks any patterns in the training data. Avoids the case where all user1 interactions are together, then user2... etc
@@ -288,66 +674,70 @@ class RecommenderSystem:
         val_indices = indices[train_size:] # Validation set
 
         users_train, songs_train, metadata_train, demographics_train, labels_train = (
-            users[train_indices], songs[train_indices], metadata[train_indices], demographics[train_indices], labels[train_indices]
+            users[train_indices], songs[train_indices], metadata[train_indices],
+            demographics[train_indices], labels[train_indices]
         )
         users_val, songs_val, metadata_val, demographics_val, labels_val = (
-            users[val_indices], songs[val_indices], metadata[val_indices], demographics[val_indices], labels[val_indices]
+            users[val_indices], songs[val_indices], metadata[val_indices],
+            demographics[val_indices], labels[val_indices]
         )
+
+        best_val_loss = float('inf')
+        patience = 5  # Number of epochs to wait for improvement
+        patience_counter = 0
 
         for epoch in range(epochs):
             self.model.train()
-            optimizer.zero_grad() # Sets the gradient to zero at the beginning of every epoch
-            predictions = self.model(users_train, songs_train, metadata_train, demographics_train).squeeze() # Squeeze because BCE predictions are in [batch_size, 1] shape, i.e. each value in the present unsqueezed array is a vector in itself.
-            loss = criterion(predictions, labels_train)
+            optimizer.zero_grad()
+            
+            # Get predictions and confidence scores
+            predictions, confidence = self.model(
+                users_train, songs_train,
+                metadata_train, demographics_train
+            )
+            
+            # Calculate combined loss
+            loss = self._calculate_combined_loss(predictions, confidence, labels_train)
             loss.backward()
             optimizer.step()
 
-            self.model.eval() # Evaluates the performance of the model
-            with torch.no_grad(): # Don't need to evaluate gradients during validation
-                val_predictions = self.model(users_val, songs_val, metadata_val, demographics_val).squeeze()
-                val_loss = criterion(val_predictions, labels_val)
+            # Validation step
+            self.model.eval()
+            with torch.no_grad():
+                val_predictions, val_confidence = self.model(
+                    users_val, songs_val,
+                    metadata_val, demographics_val
+                )
+                val_loss = self._calculate_combined_loss(val_predictions, val_confidence, labels_val)
 
-            logging.info(f"Epoch {epoch+1}/{epochs} - Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+                # Calculate metrics for logging
+                train_accuracy = (predictions.round() == labels_train).float().mean()
+                val_accuracy = (val_predictions.round() == labels_val).float().mean()
+                
+                # Calculate confidence calibration (how well confidence predicts accuracy)
+                train_conf_error = torch.abs(confidence.mean() - train_accuracy)
+                val_conf_error = torch.abs(val_confidence.mean() - val_accuracy)
 
-    def predict_next_songs(self, user_id,  track_data, demographics_df, n=5):
-        """Predict next songs for a user."""
-        encoded_demographics = self.encode_demographics(demographics_df)
-        user_encoded = self.user_encoder.transform([user_id])[0] # user_0 -> proxy for user_0 (refer line 124)
-        all_songs = torch.arange(len(self.song_encoder.classes_)) # basically preparing input data. Generating an array of user proxies of length = all songs in the dataset so that we can stack-rank all songs
-        
-        # Generate metadata tensor for all songs
-        metadata = torch.zeros((len(all_songs), self.metadata_dim)) # bunch of zeros matching the array size of all songs
-        
-        user_demographics = encoded_demographics[encoded_demographics['user_id'] == user_id].iloc[0]
-        demographic_tensor = torch.tensor([
-            user_demographics['age_group_encoded'],
-            user_demographics['gender_encoded'],
-            user_demographics['location_encoded'],
-            user_demographics['occupation_encoded']
-        ], dtype=torch.float32).repeat(len(all_songs), 1)
+            # Log detailed metrics
+            logging.info(
+                f"Epoch {epoch+1}/{epochs} - "
+                f"Train Loss: {loss.item():.4f}, "
+                f"Val Loss: {val_loss.item():.4f}, "
+                f"Train Acc: {train_accuracy.item():.4f}, "
+                f"Val Acc: {val_accuracy.item():.4f}, "
+                f"Train Conf Error: {train_conf_error.item():.4f}, "
+                f"Val Conf Error: {val_conf_error.item():.4f}"
+            )
 
-        user_input = torch.full((len(all_songs),), user_encoded)
-        logging.debug(f"Generating predictions for user {user_id}")
-        
-        with torch.no_grad():
-            predictions = self.model(
-                user_input, 
-                all_songs, 
-                metadata,
-                demographic_tensor
-            ).squeeze() # predicting the likelihood that the user will like all songs (0 < likelihood < 1, due to BCE)
-        
-        # Adjust n to be no larger than the number of available songs
-        n = min(n, len(predictions))
-        logging.info(f"Requesting {n} recommendations from {len(predictions)} available songs")
-        
-        top_n_indices = torch.topk(predictions, n).indices # Selecting the song proxies for the top n songs from our list of all songs
-        recommended_ids = list(self.song_encoder.inverse_transform(top_n_indices.numpy()))
-        song_details = []
-        for track_id in recommended_ids:
-            track = track_data.loc[track_id]
-            song_details.append(f"{track['track_title']} - {track['artist_name']}") # Song Title - Artist Name format
-        return song_details
+            # Early stopping check
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    logging.info(f"Early stopping triggered after {epoch + 1} epochs")
+                    break
 
     def save_model(self, filepath):
         """Save the model and encoders."""

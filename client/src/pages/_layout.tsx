@@ -1,6 +1,9 @@
-import { Inter } from "next/font/google"
+import { Montserrat } from "next/font/google"
 
-const inter = Inter({ subsets: ["latin"] })
+const montserrat = Montserrat({ 
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700", "900"]
+})
 
 export default function RootLayout({
   children,
@@ -8,7 +11,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}>
+    <div className={`${montserrat.className} min-h-screen bg-background text-foreground antialiased`}>
       {children}
     </div>
   );

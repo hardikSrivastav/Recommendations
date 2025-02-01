@@ -74,16 +74,41 @@ class IntegratedMusicRecommender:
         
         return self.recommender
 
-    def get_recommendations(self, user_id, track_data, n=5):
+    async def get_recommendations(self, user_id, track_data, demographics_df=None, n=5):
+        """Get recommendations for a user.
+        
+        Args:
+            user_id: The ID of the user to get recommendations for
+            track_data: DataFrame containing track metadata
+            demographics_df: Optional demographics DataFrame. If not provided, uses stored demographics
+            n: Number of recommendations to return
+            
+        Returns:
+            List of recommendations with scores and confidence values
+            
+        Raises:
+            ValueError: If model is not trained
+        """
         if not hasattr(self, 'recommender') or self.recommender.model is None:
             raise ValueError("Model needs to be trained first")
-        return self.recommender.predict_next_songs(user_id, track_data, self.demographics_df, n=n)  
+            
+        # Use provided demographics if available, otherwise use stored demographics
+        demographics = demographics_df if demographics_df is not None else self.demographics_df
+        
+        if demographics is None:
+            raise ValueError("No demographics data available. Either provide demographics_df or train the model first.")
+            
+        return await self.recommender.predict_next_songs(user_id, track_data, demographics, n=n)
 
 # Example usage
 if __name__ == "__main__":
-    integrated_recommender = IntegratedMusicRecommender()
-    model = integrated_recommender.train_model(num_users=10, interactions_per_user=15, epochs=10)
-    dataset_processor = FMADatasetProcessor(base_dir='./fma_metadata')
-    recommendations = integrated_recommender.get_recommendations("user_0", dataset_processor.process_dataset(), n=5)
-    print(f"Recommendations for user_0: {recommendations}")
+    async def main():
+        integrated_recommender = IntegratedMusicRecommender()
+        model = integrated_recommender.train_model(num_users=10, interactions_per_user=15, epochs=10)
+        dataset_processor = FMADatasetProcessor(base_dir='./fma_metadata')
+        recommendations = await integrated_recommender.get_recommendations("user_0", dataset_processor.process_dataset(), n=5)
+        print(f"Recommendations for user_0: {recommendations}")
+    
+    import asyncio
+    asyncio.run(main())
     

@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import * as Select from "@/components/ui/select"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface DemographicsFormProps {
   onSubmit: (data: UserDemographics) => void;
+  initialData?: UserDemographics | null;
 }
 
 interface UserDemographics {
@@ -14,19 +15,57 @@ interface UserDemographics {
   occupation: string;
 }
 
-export function DemographicsForm({ onSubmit }: DemographicsFormProps) {
+export function DemographicsForm({ onSubmit, initialData }: DemographicsFormProps) {
   const [formData, setFormData] = useState<UserDemographics>({
     age: 0,
     gender: '',
     location: '',
     occupation: ''
   });
+  const [isEditing, setIsEditing] = useState(!initialData);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
-    // POST to /demographics (to be implemented)
   };
+
+  if (!isEditing && initialData) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <label className="block text-lg font-medium text-white">Age</label>
+            <p className="text-lg text-gray-300">{initialData.age}</p>
+          </div>
+          <div>
+            <label className="block text-lg font-medium text-white">Gender</label>
+            <p className="text-lg text-gray-300">{initialData.gender}</p>
+          </div>
+          <div>
+            <label className="block text-lg font-medium text-white">Location</label>
+            <p className="text-lg text-gray-300">{initialData.location}</p>
+          </div>
+          <div>
+            <label className="block text-lg font-medium text-white">Occupation</label>
+            <p className="text-lg text-gray-300">{initialData.occupation}</p>
+          </div>
+        </div>
+        <Button 
+          onClick={() => setIsEditing(true)}
+          className="w-full py-6 text-lg font-medium mt-8 bg-primary/90 hover:bg-primary/100 text-primary-foreground transition-colors"
+          size="lg"
+        >
+          Edit Demographics
+        </Button>
+      </div>
+    );
+  }
 
   const genderOptions = ['M', 'F', 'NB', 'O'];
   const locations = ['US', 'UK', 'CA', 'AU', 'DE', 'FR', 'JP', 'BR', 'IN'];
@@ -126,7 +165,7 @@ export function DemographicsForm({ onSubmit }: DemographicsFormProps) {
         className="w-full py-6 text-lg font-medium mt-8 bg-primary/90 hover:bg-primary/100 text-primary-foreground transition-colors"
         size="lg"
       >
-        Submit Demographics
+        {initialData ? 'Update Demographics' : 'Submit Demographics'}
       </Button>
     </form>
   );

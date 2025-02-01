@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;700;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,33 +9,33 @@
 
 @layer base {
   :root {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
 
-    --card: 224 71% 4%;
-    --card-foreground: 213 31% 91%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 224 71% 4%;
-    --popover-foreground: 213 31% 91%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
 
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
 
-    --accent: 216 34% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --ring: 216 34% 17%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
 
     --radius: 0.75rem;
   }
@@ -74,18 +76,17 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: 'Space Grotesk', sans-serif;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 }
 
 /* Custom gradient backgrounds */
 .gradient-dark {
-  background: linear-gradient(to bottom, #0f172a, #1e1b4b);
+  background: linear-gradient(to bottom, #000000, #1a1a1a);
 }
 
 .gradient-card {
-  background: rgba(15, 23, 42, 0.6);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
 }
 
 /* Glow effects */
@@ -95,7 +96,7 @@
 
 .glow-border {
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
 }
 
 @keyframes gradient {
@@ -115,13 +116,10 @@
   font-weight: 800;
   text-transform: lowercase;
   letter-spacing: -0.02em;
-  background: linear-gradient(to right, #93c5fd, #a78bfa);
+  background: linear-gradient(to right, #fff, #ccc);
   -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 
-    0 0 25px rgba(147, 197, 253, 0.3),
-    0 0 50px rgba(167, 139, 250, 0.2);
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
   position: relative;
   display: inline-block;
 }

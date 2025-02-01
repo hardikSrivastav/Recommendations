@@ -1,0 +1,19 @@
+pytest==7.4.0
+pytest-asyncio==0.23.5
+pytest-cov==4.1.0
+coverage==7.3.0
+torch>=2.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+pytest-xdist==3.5.0  # for parallel test execution
+pytest-mock==3.11.1
+freezegun==1.2.2  # For time-based tests
+requests-mock==1.11.0  # For mocking HTTP requests
+PyJWT==2.8.0
+Flask==3.0.0
+flask-cors==4.0.0
+pymongo==4.5.0
+python-dotenv==1.0.0
+bcrypt==4.0.1
+sqlalchemy==2.0.0
+scikit-learn>=1.0.0  # For ML model components 
