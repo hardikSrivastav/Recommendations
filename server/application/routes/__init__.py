@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from application.database.database_service import DatabaseService
 
@@ -6,16 +6,42 @@ def create_app(testing: bool = False):
     app = Flask(__name__)
     
     # Configure CORS
-    cors = CORS(
+    CORS(
         app,
-        resources={r"/api/*": {
-            "origins": ["http://localhost:3001"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Session-ID"],
-            "expose_headers": ["X-Session-ID"],  # Allow client to read this header
-            "supports_credentials": True
-        }}
+        resources={
+            r"/api/*": {
+                "origins": ["http://localhost:3000", "http://localhost:3001"],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": [
+                    "Content-Type",
+                    "Authorization",
+                    "X-Session-ID",
+                    "Accept",
+                    "Origin",
+                    "X-Requested-With"
+                ],
+                "expose_headers": ["X-Session-ID"],
+                "supports_credentials": True,
+                "send_wildcard": False,
+                "max_age": 86400,  # Cache preflight requests for 24 hours
+                "vary_header": True,
+                "allow_credentials": True
+            }
+        }
     )
+
+    # Add CORS headers to all responses
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get('Origin')
+        if origin in ["http://localhost:3000", "http://localhost:3001"]:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            if request.method == 'OPTIONS':
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Session-ID, Accept, Origin, X-Requested-With'
+                response.headers['Access-Control-Max-Age'] = '86400'
+        return response
 
     # Import blueprints
     from .user_routes import user_bp

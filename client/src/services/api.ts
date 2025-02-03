@@ -55,6 +55,8 @@ export const userAPI = {
     api.get('/users/demographics'),
   updateDemographics: (data: any) => 
     api.put('/users/demographics', data),
+  deleteUserData: () =>
+    api.delete('/users/account'),
 };
 
 // Music API
@@ -62,25 +64,95 @@ export const musicAPI = {
   search: (query: string) => 
     api.get(`/music/search?q=${encodeURIComponent(query)}`),
   getDetails: (songId: number) => 
-    api.get(`/music/${songId}`),
+    api.get(`/music/songs/${songId}`),
 };
 
 // Recommendations API
+export interface RecommendationResponse {
+  user_id: string;
+  timestamp: string;
+  context: {
+    total_songs: number;
+    recent_songs: string[];
+    demographics: Record<string, any>;
+    is_cold_start: boolean;
+  };
+  metadata?: {
+    requested_limit: number;
+    buffer_limit: number;
+    total_fetched: number;
+  };
+  predictions: Array<{
+    song_id: string;
+    confidence: number;
+    predictor_weights: Record<string, number>;
+    was_shown: boolean;
+    was_selected: boolean;
+  }>;
+}
+
 export const recommendationsAPI = {
   get: () => 
-    api.get('/recommendations'),
+    api.get<RecommendationResponse>('/recommendations'),
   getPersonalized: () => 
-    api.get('/recommendations/personalized'),
+    api.get<RecommendationResponse>('/recommendations/personalized'),
+  getTop5Suggestions: (limit: number = 5, useCache: boolean = false) =>
+    api.get<RecommendationResponse>(`/recommendations/personalized?limit=${limit}&use_cache=${useCache}`),
+  cachePredictions: (predictions: RecommendationResponse) =>
+    api.post('/recommendations/cache', predictions),
+  clearCache: () =>
+    api.delete('/recommendations/cache'),
 };
 
 // Feedback API
 export const feedbackAPI = {
-  addToHistory: (songId: number) => 
-    api.post('/feedback/history', { song_id: songId }),
-  removeFromHistory: (songId: number) => 
-    api.delete(`/feedback/history/${songId}`),
-  getHistory: () => 
-    api.get('/feedback/history'),
+  addToHistory: async (songId: number) => {
+    try {
+      console.log('Adding song to history:', songId);
+      const response = await api.post('/music/history', { song_id: songId });
+      console.log('Successfully added song to history:', response.data);
+      return response;
+    } catch (error: any) {
+      console.error('Failed to add song to history:', error);
+      console.error('Request details:', {
+        songId,
+        endpoint: '/music/history',
+        error: error.response?.data || error.message
+      });
+      throw error;
+    }
+  },
+  removeFromHistory: async (songId: number) => {
+    try {
+      console.log('Removing song from history:', songId);
+      const response = await api.delete(`/music/history/${songId}`);
+      console.log('Successfully removed song from history:', response.data);
+      return response;
+    } catch (error: any) {
+      console.error('Failed to remove song from history:', error);
+      console.error('Request details:', {
+        songId,
+        endpoint: `/music/history/${songId}`,
+        error: error.response?.data || error.message
+      });
+      throw error;
+    }
+  },
+  getHistory: async () => {
+    try {
+      console.log('Fetching history');
+      const response = await api.get('/music/history');
+      console.log('Successfully fetched history:', response.data);
+      return response;
+    } catch (error: any) {
+      console.error('Failed to fetch history:', error);
+      console.error('Request details:', {
+        endpoint: '/music/history',
+        error: error.response?.data || error.message
+      });
+      throw error;
+    }
+  },
 };
 
 export default api; 

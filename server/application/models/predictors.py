@@ -23,7 +23,7 @@ class DemographicPredictor:
     Predicts recommendations based on demographic similarity.
     Uses collaborative filtering among users with similar demographics.
     """
-    def __init__(self, similarity_threshold: float = 0.7):
+    def __init__(self, similarity_threshold: float = 0.3):  # Lower threshold for sparse data
         self.similarity_threshold = similarity_threshold
         
     def _calculate_demographic_similarity(
@@ -51,15 +51,37 @@ class DemographicPredictor:
         similarity = 0.0
         
         # Age group similarity (closer = more similar)
-        age_diff = abs(user_demographics['age_group_encoded'] - 
-                      other_demographics['age_group_encoded'])
-        age_sim = 1.0 - (age_diff / 4)  # 4 is max possible difference
-        similarity += weights['age_group'] * age_sim
+        try:
+            # Try direct age group comparison first
+            if user_demographics.get('age_group') == other_demographics.get('age_group'):
+                similarity += weights['age_group']
+            else:
+                # Fall back to encoded values if direct match fails
+                age_diff = abs(float(user_demographics.get('age_group_encoded', 0)) - 
+                             float(other_demographics.get('age_group_encoded', 0)))
+                age_sim = 1.0 - (age_diff / 4)  # 4 is max possible difference
+                similarity += weights['age_group'] * age_sim
+        except (KeyError, TypeError, ValueError):
+            # If age group comparison fails, use a default similarity
+            similarity += weights['age_group'] * 0.5
         
         # Direct matches for other features
         for feature in ['location', 'occupation', 'gender']:
-            if user_demographics[f'{feature}_encoded'] == other_demographics[f'{feature}_encoded']:
-                similarity += weights[feature]
+            try:
+                # Try direct value comparison first
+                if user_demographics.get(feature) == other_demographics.get(feature):
+                    similarity += weights[feature]
+                    continue
+                
+                # Try encoded values next
+                if user_demographics.get(f'{feature}_encoded') == other_demographics.get(f'{feature}_encoded'):
+                    similarity += weights[feature]
+                else:
+                    # Partial match for non-exact matches
+                    similarity += weights[feature] * 0.3
+            except (KeyError, TypeError):
+                # If comparison fails, use a default similarity
+                similarity += weights[feature] * 0.3
                 
         return similarity
         
@@ -70,6 +92,10 @@ class DemographicPredictor:
     ) -> pd.DataFrame:
         """Find users with similar demographics above the threshold."""
         similarities = []
+        
+        # If no other users, return empty DataFrame
+        if all_demographics is None or all_demographics.empty:
+            return pd.DataFrame(columns=['user_id', 'similarity'])
         
         for _, other_user in all_demographics.iterrows():
             if other_user['user_id'] != user_demographics['user_id']:
@@ -97,6 +123,13 @@ class DemographicPredictor:
         song_scores = defaultdict(float)
         total_similarity = similar_users['similarity'].sum()
         
+        if total_similarity == 0:
+            # If no similar users found, return default scores
+            if not listening_history.empty:
+                unique_songs = listening_history['song_id'].unique()
+                return {str(song_id): 0.5 for song_id in unique_songs}
+            return {}
+        
         for _, similar_user in similar_users.iterrows():
             user_history = listening_history[
                 listening_history['user_id'] == similar_user['user_id']
@@ -105,7 +138,7 @@ class DemographicPredictor:
             # Weight each song by user similarity
             weight = similar_user['similarity'] / total_similarity
             for _, interaction in user_history.iterrows():
-                song_scores[interaction['song_id']] += weight
+                song_scores[str(interaction['song_id'])] += weight
                 
         return song_scores
         
@@ -119,6 +152,15 @@ class DemographicPredictor:
         Generate predictions based on demographic similarity.
         Returns dict of song_id -> score mappings.
         """
+        # Handle bootstrap case
+        if all_demographics is None or all_demographics.empty:
+            logging.warning("No demographic data available for comparison")
+            # Return default scores for recent songs
+            if not listening_history.empty:
+                unique_songs = listening_history['song_id'].unique()
+                return {str(song_id): 0.5 for song_id in unique_songs}
+            return {}
+            
         # Find similar users
         similar_users = self._find_similar_users(
             input_data.demographics,
@@ -127,6 +169,13 @@ class DemographicPredictor:
         
         if similar_users.empty:
             logging.warning(f"No similar users found for user {input_data.user_id}")
+            # Return default scores for songs in listening history
+            if not listening_history.empty:
+                unique_songs = listening_history['song_id'].unique()
+                return {
+                    str(song_id): 0.5  # Default medium score
+                    for song_id in unique_songs
+                }
             return {}
             
         # Get recommendations from similar users
@@ -134,6 +183,19 @@ class DemographicPredictor:
             similar_users,
             listening_history
         )
+        
+        # Ensure we have scores for recent songs
+        if not song_scores and not listening_history.empty:
+            unique_songs = listening_history['song_id'].unique()
+            song_scores = {str(song_id): 0.5 for song_id in unique_songs}
+        
+        # Normalize scores if any exist
+        if song_scores:
+            max_score = max(song_scores.values())
+            if max_score > 0:
+                song_scores = {
+                    k: v/max_score for k, v in song_scores.items()
+                }
         
         return song_scores
 
@@ -161,22 +223,49 @@ class PopularityPredictor:
         """
         song_scores = defaultdict(float)
         
-        for _, interaction in listening_history.iterrows():
-            age_days = (current_time - interaction['timestamp']).days
-            if age_days <= self.max_age_days:
-                weight = self._calculate_time_weight(age_days)
-                song_scores[interaction['song_id']] += weight
-                
-        # Normalize scores
-        if song_scores:
-            max_score = max(song_scores.values())
+        # Handle empty history case
+        if listening_history is None or listening_history.empty:
+            return {}
+            
+        # Get all unique songs
+        unique_songs = listening_history['song_id'].unique()
+        
+        # Calculate base popularity for each song
+        for song_id in unique_songs:
+            song_history = listening_history[listening_history['song_id'] == song_id]
+            
+            # Calculate recency-weighted score
+            total_weight = 0
+            for _, interaction in song_history.iterrows():
+                try:
+                    age_days = (current_time - pd.to_datetime(interaction['timestamp'])).days
+                    if age_days <= self.max_age_days:
+                        weight = self._calculate_time_weight(age_days)
+                        song_scores[str(song_id)] += weight
+                        total_weight += 1
+                except (TypeError, AttributeError, ValueError):
+                    # If timestamp comparison fails, use a default weight
+                    song_scores[str(song_id)] += 0.5
+                    total_weight += 1
+            
+            # Normalize by number of interactions
+            if total_weight > 0:
+                song_scores[str(song_id)] /= total_weight
+        
+        # If no scores calculated, give equal base scores
+        if not song_scores and unique_songs.size > 0:
+            return {str(song_id): 0.5 for song_id in unique_songs}
+        
+        # Normalize all scores
+        max_score = max(song_scores.values()) if song_scores else 1.0
+        if max_score > 0:
             song_scores = {
                 song_id: score/max_score 
                 for song_id, score in song_scores.items()
             }
             
         return song_scores
-        
+
     def _apply_demographic_filter(
         self,
         song_scores: Dict[str, float],
@@ -217,7 +306,7 @@ class PopularityPredictor:
             adjusted_scores[song_id] = base_score * demographic_multiplier
             
         return adjusted_scores
-        
+
     async def predict(
         self,
         input_data: PopularityInput,
@@ -228,6 +317,11 @@ class PopularityPredictor:
         Generate predictions based on popularity.
         Returns dict of song_id -> score mappings.
         """
+        # Handle bootstrap case
+        if listening_history is None or listening_history.empty:
+            logging.warning("No listening history available for popularity calculation")
+            return {}
+            
         # Calculate base popularity scores
         current_time = datetime.now()
         song_scores = self._calculate_popularity_scores(
@@ -235,8 +329,13 @@ class PopularityPredictor:
             current_time
         )
         
+        # If no scores, return default scores for all songs in history
+        if not song_scores and not listening_history.empty:
+            unique_songs = listening_history['song_id'].unique()
+            song_scores = {str(song_id): 0.5 for song_id in unique_songs}
+        
         # Apply demographic filtering if context available
-        if input_data.user_context and demographics is not None:
+        if input_data.user_context and demographics is not None and not demographics.empty:
             song_scores = self._apply_demographic_filter(
                 song_scores,
                 input_data.user_context,

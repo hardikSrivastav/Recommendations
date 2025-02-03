@@ -6,6 +6,8 @@ import { useState, useEffect } from "react"
 interface DemographicsFormProps {
   onSubmit: (data: UserDemographics) => void;
   initialData?: UserDemographics | null;
+  onForgetMe?: () => void;
+  onEditToggle: () => void;
 }
 
 interface UserDemographics {
@@ -15,14 +17,14 @@ interface UserDemographics {
   occupation: string;
 }
 
-export function DemographicsForm({ onSubmit, initialData }: DemographicsFormProps) {
+export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditToggle }: DemographicsFormProps) {
   const [formData, setFormData] = useState<UserDemographics>({
     age: 0,
     gender: '',
     location: '',
     occupation: ''
   });
-  const [isEditing, setIsEditing] = useState(!initialData);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -33,36 +35,56 @@ export function DemographicsForm({ onSubmit, initialData }: DemographicsFormProp
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
+    setIsEditing(false);
+    onEditToggle();
+  };
+
+  const handleForgetMe = () => {
+    if (window.confirm('Are you sure you want to delete all your data? This action cannot be undone.')) {
+      onForgetMe?.();
+    }
+  };
+
+  const handleEditClick = () => {
+    setIsEditing(!isEditing);
+    onEditToggle();
   };
 
   if (!isEditing && initialData) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-6">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-lg font-medium text-white">Age</label>
-            <p className="text-lg text-gray-300">{initialData.age}</p>
+            <label className="text-sm text-gray-400">Age</label>
+            <p className="text-white">{initialData.age}</p>
           </div>
           <div>
-            <label className="block text-lg font-medium text-white">Gender</label>
-            <p className="text-lg text-gray-300">{initialData.gender}</p>
+            <label className="text-sm text-gray-400">Gender</label>
+            <p className="text-white">{initialData.gender}</p>
           </div>
           <div>
-            <label className="block text-lg font-medium text-white">Location</label>
-            <p className="text-lg text-gray-300">{initialData.location}</p>
+            <label className="text-sm text-gray-400">Location</label>
+            <p className="text-white">{initialData.location}</p>
           </div>
           <div>
-            <label className="block text-lg font-medium text-white">Occupation</label>
-            <p className="text-lg text-gray-300">{initialData.occupation}</p>
+            <label className="text-sm text-gray-400">Occupation</label>
+            <p className="text-white">{initialData.occupation}</p>
           </div>
         </div>
-        <Button 
-          onClick={() => setIsEditing(true)}
-          className="w-full py-6 text-lg font-medium mt-8 bg-primary/90 hover:bg-primary/100 text-primary-foreground transition-colors"
-          size="lg"
-        >
-          Edit Demographics
-        </Button>
+        <div className="flex gap-4 pt-4">
+          <Button
+            variant="secondary"
+            onClick={handleEditClick}
+          >
+            Edit Demographics
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleForgetMe}
+          >
+            Forget Me
+          </Button>
+        </div>
       </div>
     );
   }
@@ -160,13 +182,29 @@ export function DemographicsForm({ onSubmit, initialData }: DemographicsFormProp
         </div>
       </div>
 
-      <Button 
-        type="submit" 
-        className="w-full py-6 text-lg font-medium mt-8 bg-primary/90 hover:bg-primary/100 text-primary-foreground transition-colors"
-        size="lg"
-      >
-        {initialData ? 'Update Demographics' : 'Submit Demographics'}
-      </Button>
+      <div className="flex gap-4 mt-8">
+        <Button 
+          type="submit" 
+          className="flex-1 py-6 text-lg font-medium bg-primary/90 hover:bg-primary/100 text-primary-foreground transition-colors"
+          size="lg"
+        >
+          {initialData ? 'Update Demographics' : 'Submit Demographics'}
+        </Button>
+        {initialData && (
+          <Button 
+            type="button"
+            onClick={() => {
+              setIsEditing(false);
+              onEditToggle();
+            }}
+            className="flex-1 py-6 text-lg font-medium bg-secondary/90 hover:bg-secondary text-secondary-foreground transition-colors"
+            size="lg"
+            variant="secondary"
+          >
+            Cancel
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

@@ -1,11 +1,24 @@
+import '@/styles/globals.css'
 import type { AppProps } from 'next/app'
-import RootLayout from './_layout'
-import "@/styles/globals.css"
+import { Inter } from 'next/font/google'
+import { Toaster } from 'sonner'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <RootLayout>
+    <main className={inter.className}>
       <Component {...pageProps} />
-    </RootLayout>
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: 'hsl(var(--background))',
+            color: 'hsl(var(--foreground))',
+            border: '1px solid hsl(var(--border))',
+          },
+        }}
+      />
+    </main>
   )
 }

@@ -16,6 +16,8 @@ def create_app(testing=False):
     app.config.from_object('config.Config')
     if testing:
         app.config.from_object('config.TestConfig')
+    app.config['PROPAGATE_EXCEPTIONS'] = True
+    app.config['JSON_SORT_KEYS'] = False  # Preserve JSON order
 
     # Initialize database
     app.db = DatabaseService(testing=testing)

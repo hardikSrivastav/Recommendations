@@ -136,16 +136,30 @@ def update_preferences(current_user):
 @user_bp.route('/account', methods=['DELETE'])
 @session_user
 def delete_account(current_user):
-    """Delete user account"""
+    """Delete user account and all associated data"""
     try:
         user_id = str(current_user['_id'])
+        
+        # Delete user's demographics data
+        db_service.delete_demographics(user_id)
+        
+        # Delete user's listening history
+        db_service.delete_listening_history(user_id)
+        
+        # Delete user's preferences
+        db_service.delete_user_preferences(user_id)
+        
+        # Finally delete the user account itself
         db_service.delete_user(user_id)
         
         return jsonify({
-            'message': 'Account deleted successfully'
+            'message': 'Account and all associated data deleted successfully'
         }), 200
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in delete_account: {error_details}")  # Log the full error
         return jsonify({
             'error': 'Server error',
             'details': str(e)

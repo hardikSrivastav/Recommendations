@@ -3,22 +3,29 @@ from datetime import datetime
 from application.models.fma_dataset_processor import FMADatasetProcessor
 from application.models.integrator import IntegratedMusicRecommender
 from application.database.database_service import DatabaseService
+from application.database.postgres_service import PostgresService
 from application.services.elasticsearch_service import ElasticsearchService
 from functools import wraps
 import jwt
 from application.utils.session_user import session_user
+import json
+from bson import json_util
+import logging
 
 music_bp = Blueprint('music', __name__)
 fma_processor = FMADatasetProcessor()
 recommender = IntegratedMusicRecommender()
 db_service = None
+pg_service = None
 es_service = ElasticsearchService()
 
 def init_services(testing: bool = False):
     """Initialize database and elasticsearch services."""
-    global db_service
+    global db_service, pg_service
     if db_service is None:
         db_service = DatabaseService(testing=testing)
+    if pg_service is None:
+        pg_service = PostgresService(testing=testing)
         
     # Initialize Elasticsearch index if needed
     try:
@@ -34,7 +41,7 @@ def init_services(testing: bool = False):
 @music_bp.before_request
 def ensure_services():
     """Ensure all services are initialized before each request."""
-    if db_service is None:
+    if db_service is None or pg_service is None:
         init_services()
 
 def token_required(f):
@@ -87,31 +94,47 @@ def search_songs(current_user):
             'details': str(e)
         }), 500
 
-@music_bp.route('/songs/<int:song_id>')
-@session_user
-def get_song_details(current_user, song_id):
+@music_bp.route('/songs/<int:song_id>', methods=['GET', 'OPTIONS'])
+def get_song_details(song_id):
     """Get details for a specific song"""
+    # Handle OPTIONS request for CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        return response
+
     try:
-        # Get the dataset
-        dataset = fma_processor.process_dataset()
+        print(f"Fetching details for song {song_id}")
+        # Get song details from PostgreSQL
+        tracks = pg_service.get_tracks([song_id])
         
-        # Get song details
-        if song_id not in dataset.index:
+        if tracks.empty:
+            print(f"Song {song_id} not found")
             return jsonify({'error': 'Song not found'}), 404
             
-        song = dataset.loc[song_id]
+        # Get the song details (first row since we queried by ID)
+        song = tracks.iloc[0]
         
-        return jsonify({
-            'id': int(song.name),
-            'track_title': song['track_title'],
-            'artist_name': song['artist_name'],
-            'album_title': song['album_title'],
-            'track_genres': song.get('track_genres', []),
-            'track_date_created': song.get('track_date_created'),
-            'track_duration': song.get('track_duration')
-        }), 200
+        response_data = {
+            'id': int(song.name),  # Index is the song ID
+            'track_title': str(song['track_title']),
+            'artist_name': str(song['artist_name']),
+            'album_title': str(song['album_title']),
+            'track_genres': eval(song['track_genres']) if isinstance(song['track_genres'], str) else [],
+            'track_date_created': None,  # Not available in our dataset
+            'track_duration': float(song['duration']),
+            'track_tags': eval(song['track_tags']) if isinstance(song['track_tags'], str) else []
+        }
         
+        print(f"Sending response: {response_data}")
+        response = jsonify(response_data)
+        print(f"Response: {response}")
+        return response, 200
+            
     except Exception as e:
+        print(f"Server error in get_song_details: {str(e)}")
         return jsonify({
             'error': 'Server error',
             'details': str(e)
@@ -137,12 +160,14 @@ def get_popular_songs():
         popular_songs = db_service.get_popular_songs(limit=limit, time_range=time_range)
         
         # Get song details for each popular song
-        dataset = fma_processor.process_dataset()
+        song_ids = [song['song_id'] for song in popular_songs]
+        tracks = pg_service.get_tracks(song_ids)
+        
         results = []
         for song in popular_songs:
             song_id = song['song_id']
-            song_data = dataset.loc[song_id]
-            if not song_data.empty:
+            if song_id in tracks.index:
+                song_data = tracks.loc[song_id]
                 results.append({
                     'id': int(song_id),
                     'track_title': song_data['track_title'],
@@ -164,13 +189,20 @@ def get_popular_songs():
 def get_genres():
     """Get list of available genres"""
     try:
-        # Get the dataset
-        dataset = fma_processor.process_dataset()
+        # Get unique genres from PostgreSQL
+        tracks = pg_service.get_tracks()
+        genres = []
+        for track_genres in tracks['track_genres']:
+            try:
+                genre_list = eval(track_genres)
+                genres.extend(genre_list)
+            except:
+                continue
         
         # Get unique genres
-        genres = dataset['track_genres'].dropna().unique().tolist()
+        unique_genres = list(set(genres))
         
-        return jsonify(genres), 200
+        return jsonify(unique_genres), 200
         
     except Exception as e:
         return jsonify({
@@ -188,20 +220,22 @@ def get_songs_by_genre(genre):
         # Get offset for pagination
         offset = int(request.args.get('offset', 0))
         
-        # Get the dataset
-        dataset = fma_processor.process_dataset()
+        # Get tracks from PostgreSQL
+        tracks = pg_service.get_tracks()
         
         # Filter songs by genre
-        genre_songs = dataset[dataset['track_genres'].str.contains(genre, case=False, na=False)]
+        genre_songs = tracks[tracks['track_genres'].apply(
+            lambda x: genre.lower() in [g.lower() for g in eval(x)]
+        )]
         
         # Apply pagination
         paginated_songs = genre_songs.iloc[offset:offset + limit]
         
         # Format results
         results = []
-        for _, song in paginated_songs.iterrows():
+        for idx, song in paginated_songs.iterrows():
             results.append({
-                'id': int(song.name),
+                'id': int(idx),
                 'track_title': song['track_title'],
                 'artist_name': song['artist_name'],
                 'album_title': song['album_title']
@@ -221,91 +255,115 @@ def get_songs_by_genre(genre):
             'details': str(e)
         }), 500
 
-@music_bp.route('/history', methods=['POST'])
-@token_required
-def log_listening(current_user):
-    """Log a song listening event"""
-    data = request.get_json()
-    
-    # Validate required fields
-    required_fields = ['song_id']
-    if not all(field in data for field in required_fields):
-        return jsonify({
-            'error': 'Missing required fields',
-            'required': required_fields
-        }), 400
-    
+@music_bp.route('/history', methods=['GET'])
+@session_user
+def get_history(current_user):
+    """Get user's listening history with song details"""
     try:
-        # Format listening history data
-        listening_data = {
-            'user_id': str(current_user['_id']),
-            'song_id': data['song_id'],
-            'timestamp': datetime.now().isoformat()
-        }
+        # Get listening history
+        history = db_service.get_listening_history(str(current_user['_id']))
         
-        # Add optional fields if present
-        if 'duration_seconds' in data:
-            listening_data['duration_seconds'] = data['duration_seconds']
-        if 'completed' in data:
-            listening_data['completed'] = data['completed']
+        if not history:
+            return jsonify({
+                'feedback_history': []
+            }), 200
         
-        # Store listening history
-        db_service.store_listening_history(listening_data)
+        # Get song IDs from history
+        song_ids = [entry['song_id'] for entry in history]
+        
+        # Get tracks from PostgreSQL
+        tracks = pg_service.get_tracks(song_ids)
+        
+        # Transform history data to include song details
+        formatted_history = []
+        for entry in history:
+            try:
+                song_id = int(entry['song_id']) if isinstance(entry['song_id'], str) else entry['song_id']
+                if song_id in tracks.index:
+                    song_data = tracks.loc[song_id]
+                    formatted_history.append({
+                        'id': song_id,
+                        'track_title': song_data['track_title'],
+                        'artist_name': song_data['artist_name'],
+                        'timestamp': entry.get('timestamp')
+                    })
+            except Exception as e:
+                print(f"Error processing song {song_id}: {str(e)}")
+                continue
         
         return jsonify({
-            'message': 'Listening event logged successfully',
-            'data': listening_data
-        }), 201
+            'feedback_history': formatted_history
+        }), 200
         
     except Exception as e:
+        print(f"Error in get_history: {str(e)}")
         return jsonify({
             'error': 'Server error',
             'details': str(e)
         }), 500
 
-@music_bp.route('/history/<user_id>', methods=['GET'])
-@token_required
-def get_listening_history(current_user, user_id):
-    """Get user's listening history"""
+@music_bp.route('/history', methods=['POST'])
+@session_user
+def add_to_history(current_user):
+    """Add a song to user's listening history"""
     try:
-        # Check if requesting own history or has permission
-        if str(current_user['_id']) != user_id:
-            return jsonify({'error': 'Unauthorized'}), 403
+        data = request.get_json()
+        logging.info(f"Received add to history request with data: {data}")
+        
+        if not data:
+            logging.error("No data received in request")
+            return jsonify({'error': 'No data received'}), 400
             
-        # Get limit from query params (default 50)
-        limit = int(request.args.get('limit', 50))
+        if 'song_id' not in data:
+            logging.error(f"Missing song_id in data: {data}")
+            return jsonify({'error': 'Missing song_id'}), 400
         
-        # Get offset for pagination
-        offset = int(request.args.get('offset', 0))
+        # Convert song_id to int if it's a string
+        try:
+            song_id = int(data['song_id']) if isinstance(data['song_id'], str) else data['song_id']
+        except (ValueError, TypeError) as e:
+            logging.error(f"Invalid song_id format: {data['song_id']}, error: {str(e)}")
+            return jsonify({'error': 'Invalid song_id format'}), 400
         
-        # Get listening history
-        history = db_service.get_listening_history(user_id, limit=limit, offset=offset)
+        # Verify song exists in PostgreSQL
+        tracks = pg_service.get_tracks([song_id])
+        if tracks.empty:
+            logging.error(f"Song not found in database: {song_id}")
+            return jsonify({'error': 'Invalid song_id - song not found'}), 400
         
-        # Get song details for each history entry
-        dataset = fma_processor.process_dataset()
-        results = []
-        for entry in history:
-            song_id = entry['song_id']
-            song_data = dataset.loc[song_id]
-            if not song_data.empty:
-                results.append({
-                    'id': int(song_id),
-                    'track_title': song_data['track_title'],
-                    'artist_name': song_data['artist_name'],
-                    'album_title': song_data['album_title'],
-                    'timestamp': entry['timestamp'],
-                    'duration_seconds': entry.get('duration_seconds'),
-                    'completed': entry.get('completed', True)
-                })
-                
+        history_data = {
+            'user_id': str(current_user['_id']),
+            'song_id': song_id,
+            'timestamp': datetime.utcnow(),
+            'source': 'manual_add'  # To indicate this was manually added to history
+        }
+        
+        # Store in listening_history
+        db_service.store_listening_history(history_data)
+        logging.info(f"Successfully added song {song_id} to history for user {current_user['_id']}")
+        
+        # Use json_util.dumps to handle MongoDB types
+        return json.loads(json_util.dumps({
+            'message': 'Song added to history',
+            'data': history_data
+        })), 201
+        
+    except Exception as e:
+        logging.error(f"Error in add_to_history: {str(e)}")
         return jsonify({
-            'user_id': user_id,
-            'total': db_service.get_listening_history_count(user_id),
-            'offset': offset,
-            'limit': limit,
-            'history': results
+            'error': 'Server error',
+            'details': str(e)
+        }), 500
+
+@music_bp.route('/history/<int:song_id>', methods=['DELETE'])
+@session_user
+def remove_from_history(current_user, song_id):
+    """Remove a song from user's listening history"""
+    try:
+        db_service.remove_song(str(current_user['_id']), song_id)
+        return jsonify({
+            'message': 'Song removed from history'
         }), 200
-        
     except Exception as e:
         return jsonify({
             'error': 'Server error',

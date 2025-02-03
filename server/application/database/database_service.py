@@ -319,15 +319,135 @@ class DatabaseService:
             raise e
 
     def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Get user profile including demographics for session-based users."""
+        """Get user profile including demographics from both PostgreSQL and MongoDB."""
         try:
-            # Get demographics from MongoDB
-            demographics = self.mongodb.demographics.find_one({'user_id': user_id})
-            if demographics:
+            # First try PostgreSQL
+            postgres_demo = self.get_demographics(user_id)
+            if postgres_demo:
+                # Convert to the same format as MongoDB data
+                return {
+                    'user_id': postgres_demo['user_id'],
+                    'age': postgres_demo['age'],
+                    'age_group': self._get_age_group(postgres_demo['age']),
+                    'gender': postgres_demo['gender'],
+                    'location': postgres_demo['location'],
+                    'occupation': postgres_demo['occupation']
+                }
+
+            # If not in PostgreSQL, try MongoDB
+            mongo_demo = self.mongodb.demographics.find_one({'user_id': user_id})
+            if mongo_demo:
                 # Remove MongoDB's _id field
-                demographics.pop('_id', None)
-                return demographics
+                mongo_demo.pop('_id', None)
+                return mongo_demo
+
             return None
+
         except Exception as e:
             logging.error(f"Error getting user profile: {str(e)}")
             return None 
+        
+    def delete_demographics(self, user_id: str) -> None:
+        """Delete user demographics from both PostgreSQL and MongoDB."""
+        try:
+            # Delete from PostgreSQL
+            session = self.Session()
+            try:
+                demo = session.query(UserDemographics).get(user_id)
+                if demo:
+                    session.delete(demo)
+                    session.commit()
+            finally:
+                session.close()
+
+            # Delete from MongoDB
+            self.mongodb.demographics.delete_one({'user_id': user_id})
+            
+            logging.info(f"Deleted demographics for user {user_id}")
+        except Exception as e:
+            logging.error(f"Error deleting demographics: {str(e)}")
+            raise
+
+    def delete_listening_history(self, user_id: str) -> None:
+        """Delete user's listening history from MongoDB."""
+        try:
+            result = self.mongodb.listening_history.delete_many({'user_id': user_id})
+            logging.info(f"Deleted {result.deleted_count} listening history records for user {user_id}")
+        except Exception as e:
+            logging.error(f"Error deleting listening history: {str(e)}")
+            raise
+
+    def delete_user_preferences(self, user_id: str) -> None:
+        """Delete user preferences from MongoDB."""
+        try:
+            # Delete from preferences collection
+            self.mongodb.preferences.delete_one({'user_id': user_id})
+            # Delete from feedback collection
+            self.mongodb.feedback.delete_many({'user_id': user_id})
+            # Delete from predictions collection
+            self.mongodb.predictions.delete_many({'user_id': user_id})
+            
+            logging.info(f"Deleted preferences and related data for user {user_id}")
+        except Exception as e:
+            logging.error(f"Error deleting user preferences: {str(e)}")
+            raise
+
+    def delete_user(self, user_id: str) -> None:
+        """Delete user account from MongoDB."""
+        try:
+            # Delete the user document
+            self.mongodb.users.delete_one({'_id': user_id})
+            
+            # Clear any cached data in Redis
+            pattern = f"*:{user_id}"
+            for key in self.redis.scan_iter(pattern):
+                self.redis.delete(key)
+                
+            logging.info(f"Deleted user account and cleared cache for user {user_id}")
+        except Exception as e:
+            logging.error(f"Error deleting user account: {str(e)}")
+            raise
+
+    def _get_age_group(self, age: int) -> str:
+        """Convert age to age group."""
+        if age < 18:
+            return '<18'
+        elif age < 25:
+            return '18-25'
+        elif age < 35:
+            return '26-35'
+        elif age < 50:
+            return '36-50'
+        else:
+            return '50+'
+
+    def remove_song(self, user_id: str, song_id: int, timestamp: Optional[datetime] = None) -> None:
+        """Remove feedback for a specific song from MongoDB.
+        
+        Args:
+            user_id: The ID of the user
+            song_id: The ID of the song
+            timestamp: Optional timestamp to identify a specific feedback instance.
+                      If None, removes the most recent feedback entry.
+        """
+        try:
+            query = {'user_id': user_id, 'song_id': song_id}
+            if timestamp:
+                query['timestamp'] = timestamp
+                result = self.mongodb.listening_history.delete_one(query)
+            else:
+                # If no timestamp provided, delete the most recent feedback
+                feedback = self.mongodb.listening_history.find_one(
+                    query,
+                    sort=[('timestamp', -1)]  # Sort by timestamp descending
+                )
+                if feedback:
+                    result = self.mongodb.listening_history.delete_one({'_id': feedback['_id']})
+                else:
+                    result = None
+
+            deleted = result.deleted_count if result else 0
+            logging.info(f"Deleted {deleted} feedback entry for user {user_id} and song {song_id}")
+        except Exception as e:
+            logging.error(f"Error removing feedback: {str(e)}")
+            raise

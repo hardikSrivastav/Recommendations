@@ -6,6 +6,7 @@ import { musicAPI } from "@/services/api";
 import { SongCard, type Song } from "./SongCard";
 import { cn } from "@/lib/utils";
 import debounce from "lodash/debounce";
+import { toast } from "sonner";
 
 interface SearchResponse {
   results: Song[];
@@ -15,7 +16,7 @@ interface SearchResponse {
 }
 
 interface SongSearchProps {
-  onAddToHistory: (song: Song) => void;
+  onAddToHistory: (song: Song) => Promise<void>;
 }
 
 export function SongSearch({ onAddToHistory }: SongSearchProps) {
@@ -25,6 +26,7 @@ export function SongSearch({ onAddToHistory }: SongSearchProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [addingToHistory, setAddingToHistory] = useState<number | null>(null);
 
   // Debounced search function
   const debouncedSearch = useCallback(
@@ -61,6 +63,20 @@ export function SongSearch({ onAddToHistory }: SongSearchProps) {
       debouncedSearch.cancel();
     };
   }, [searchQuery, debouncedSearch]);
+
+  const handleAddToHistory = async (song: Song) => {
+    try {
+      setAddingToHistory(song.id);
+      await onAddToHistory(song);
+      toast.success(`Added "${song.track_title}" to history`);
+    } catch (error: any) {
+      console.error("Failed to add song to history:", error);
+      const errorMessage = error.response?.data?.error || "Failed to add song to history";
+      toast.error(errorMessage);
+    } finally {
+      setAddingToHistory(null);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -121,8 +137,9 @@ export function SongSearch({ onAddToHistory }: SongSearchProps) {
                   <SongCard
                     key={song.id}
                     song={song}
-                    onAction={onAddToHistory}
-                    actionLabel="Add to History"
+                    onAction={handleAddToHistory}
+                    actionLabel={addingToHistory === song.id ? "Adding..." : "Add to History"}
+                    showAction={addingToHistory !== song.id}
                     isCompact
                   />
                 ))}
