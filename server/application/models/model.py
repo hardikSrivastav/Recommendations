@@ -38,8 +38,8 @@ class ConfidenceCalculator:
         confidence = w_h * f_h + w_e * f_e + w_d * f_d
         where:
         - w_h, w_e, w_d are weights for history, embedding, and diversity
-        - f_h = min(1, log(1 + history_length) / log(50))  # Normalized history factor
-        - f_e = cosine_similarity(user_embedding, song_embedding)
+        - f_h = min(1, log(1 + history_length) / log(50))  <-  Normalized history factor
+        - f_e = cosine_similarity(user_embedding, song_embedding) 
         - f_d = 1 - (std(prediction_scores) / max_possible_std)  # Diversity factor
         """
         history_factor = self._calculate_history_factor(user_context.get('history_length', 0))
@@ -52,14 +52,20 @@ class ConfidenceCalculator:
             self.diversity_weight * diversity_factor
         )
         
-        return min(1.0, max(0.0, confidence))
+        return min(1.0, max(0.0, confidence)) #Ensure confidence is between 0 and 1
     
     def _calculate_history_factor(self, history_length: int) -> float:
         """
         Calculate confidence factor based on user history length.
         Uses logarithmic scaling to handle varying history lengths.
         """
-        return min(1.0, np.log1p(history_length) / np.log(50))
+
+        """
+        log1p(x) = log(1+x), which means that when there are no songs added, log1p(0) = 0, rather than log(0) = -infinity, which'll throw an error.
+        divide by log(50) to normalize the history length, because the max history length is 50 songs.
+        """
+
+        return min(1.0, np.log1p(history_length) / np.log(50)) # Ensure history factor is between 0 and 1
     
     def _calculate_embedding_factor(
         self,
@@ -71,15 +77,14 @@ class ConfidenceCalculator:
         Uses normalized cosine similarity between user and song embeddings.
         
         Mathematical formulation:
-        1. Normalize embeddings: e_norm = e / ||e||
-        2. Calculate cosine similarity: cos_sim = (u_norm · s_norm)
-        3. Scale to [0,1]: similarity = (cos_sim + 1) / 2
+        1. Normalize embeddings: e_norm = e / ||e|| -> unit vector embeddings
+        2. Calculate cosine similarity: cos_sim = (u_norm · s_norm) -> dot product of the unit vector embeddings
+        3. Scale to [0,1]: similarity = (cos_sim + 1) / 2 -> scale to 0-1
         where:
         - e is the embedding vector
         - ||e|| is the L2 norm of the vector
         - u_norm is the normalized user embedding
         - s_norm is the normalized song embedding
-        - · represents dot product
         """
         if 'user_embedding' not in user_context:
             return 0.5  # Default if no embedding available
@@ -136,13 +141,21 @@ class WeightedEnsembleRecommender:
         self.confidence_calculator = ConfidenceCalculator()
         self.prediction_sources = {
             'model': None,  # Will be set to MusicRecommender instance
-            'demographic': None,  # Will be implemented
-            'popularity': None  # Will be implemented
+            'demographic': None,
+            'popularity': None  
         }
         
     def set_model_predictor(self, model_predictor: 'MusicRecommender'):
         """Set the main model predictor."""
         self.prediction_sources['model'] = model_predictor
+
+    def set_demographic_predictor(self, demographic_predictor: 'DemographicPredictor'):
+        """Set the demographic predictor."""
+        self.prediction_sources['demographic'] = demographic_predictor
+
+    def set_popularity_predictor(self, popularity_predictor: 'PopularityPredictor'):
+        """Set the popularity predictor."""
+        self.prediction_sources['popularity'] = popularity_predictor
         
     async def get_recommendations(
         self,
@@ -164,6 +177,7 @@ class WeightedEnsembleRecommender:
         
         # Get predictions from each source
         for source_name, predictor in self.prediction_sources.items():
+            # srouce_names -> Model, Demographic, Popularity
             if predictor is not None:
                 try:
                     preds = await self._get_source_predictions(predictor, user_id, user_context)
@@ -201,7 +215,7 @@ class WeightedEnsembleRecommender:
         user_context: Dict[str, Any]
     ) -> Dict[str, float]:
         """Get predictions from a single source."""
-        if hasattr(predictor, 'predict_async'):
+        if hasattr(predictor, 'predict_async'): # if the predictor operates asynchronously
             return await predictor.predict_async(user_id, user_context)
         return predictor.predict(user_id, user_context)
     
@@ -219,6 +233,9 @@ class WeightedEnsembleRecommender:
         2. For each song, calculate weighted score:
            score_i = Σ(w_j * s_ij)
         3. Calculate final confidence as weighted average of source confidences
+        w_j -> weights of predictions from j sources
+        s_ij -> scores for i songs from j sources
+        score_i -> final combined scores for i songs
         """
         # Calculate normalized weights
         total_confidence = sum(confidence_scores.values())
@@ -392,6 +409,14 @@ class RecommenderSystem:
                     labels.append(1)
                     
                     # Add negative samples (random songs not in user's history)
+
+                    """
+                    Negative samples are anti-theses to positive samples: our user(s) never actually listened to these songs, we're adding them to show the Neural Network that, presumably, "this is what the user didn't like."
+                    There is one 'negative interaction' for every positive interaction. So, each user has 2x numbers of interactions, if the interactions per user parameter = x. Negative sample songs are taken from the complementary set of songs in listening history
+                        set(ns[songs]) = U - {set(listening_history[songs])}    
+                            ^negative samples      ^positive samples
+                    The labels array is a boolean array (has either 0, 1). 0 -> Negative Sample; 1 -> Positive Sample
+                    """
                     user_songs = set(user_history['song_encoded'].values)
                     all_songs = set(range(max(listening_history['song_encoded']) + 1))
                     available_songs = list(all_songs - user_songs)
@@ -448,7 +473,7 @@ class RecommenderSystem:
             )
             
             optimizer = optim.Adam(self.model.parameters())
-            criterion = nn.BCELoss()
+            criterion = nn.BCELoss() #Binary Cross Entropy Loss -> [0,1]
             
             # Generate training data
             users, songs, demographics, labels = self.generate_training_data(

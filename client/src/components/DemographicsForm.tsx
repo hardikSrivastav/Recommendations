@@ -52,35 +52,39 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
 
   if (!isEditing && initialData) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-sm text-gray-400">Age</label>
-            <p className="text-white">{initialData.age}</p>
+            <label className="text-lg text-gray-400 font-large">Age</label>
+            <p className="text-base text-white font-large">{initialData.age}</p>
           </div>
           <div>
-            <label className="text-sm text-gray-400">Gender</label>
-            <p className="text-white">{initialData.gender}</p>
+            <label className="text-lg text-gray-400 font-large">Gender</label>
+            <p className="text-base text-white font-large">{initialData.gender}</p>
           </div>
           <div>
-            <label className="text-sm text-gray-400">Location</label>
-            <p className="text-white">{initialData.location}</p>
+            <label className="text-lg text-gray-400 font-large">Location</label>
+            <p className="text-base text-white font-large">{initialData.location}</p>
           </div>
           <div>
-            <label className="text-sm text-gray-400">Occupation</label>
-            <p className="text-white">{initialData.occupation}</p>
+            <label className="text-lg text-gray-400 font-large">Occupation</label>
+            <p className="text-base text-white font-large">{initialData.occupation}</p>
           </div>
         </div>
-        <div className="flex gap-4 pt-4">
+        <div className="flex gap-2 pt-2">
           <Button
             variant="secondary"
             onClick={handleEditClick}
+            size="sm"
+            className="text-sm"
           >
             Edit Demographics
           </Button>
           <Button
             variant="destructive"
             onClick={handleForgetMe}
+            size="sm"
+            className="text-sm"
           >
             Forget Me
           </Button>

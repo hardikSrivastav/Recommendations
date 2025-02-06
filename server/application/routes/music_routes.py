@@ -106,38 +106,55 @@ def get_song_details(song_id):
         return response
 
     try:
-        print(f"Fetching details for song {song_id}")
+        logging.info(f"Fetching details for song {song_id}")
         # Get song details from PostgreSQL
         tracks = pg_service.get_tracks([song_id])
         
-        if tracks.empty:
-            print(f"Song {song_id} not found")
-            return jsonify({'error': 'Song not found'}), 404
+        if tracks is None or tracks.empty:
+            logging.warning(f"Song {song_id} not found in database")
+            return jsonify({
+                'error': 'Song not found',
+                'song_id': song_id
+            }), 404
             
         # Get the song details (first row since we queried by ID)
-        song = tracks.iloc[0]
+        try:
+            song = tracks.iloc[0]
+        except IndexError:
+            logging.error(f"Failed to access song data for ID {song_id}")
+            return jsonify({
+                'error': 'Failed to access song data',
+                'song_id': song_id
+            }), 500
         
-        response_data = {
-            'id': int(song.name),  # Index is the song ID
-            'track_title': str(song['track_title']),
-            'artist_name': str(song['artist_name']),
-            'album_title': str(song['album_title']),
-            'track_genres': eval(song['track_genres']) if isinstance(song['track_genres'], str) else [],
-            'track_date_created': None,  # Not available in our dataset
-            'track_duration': float(song['duration']),
-            'track_tags': eval(song['track_tags']) if isinstance(song['track_tags'], str) else []
-        }
+        try:
+            response_data = {
+                'id': int(song.name),  # Index is the song ID
+                'track_title': str(song['track_title']),
+                'artist_name': str(song['artist_name']),
+                'album_title': str(song['album_title']),
+                'track_genres': eval(song['track_genres']) if isinstance(song['track_genres'], str) else [],
+                'track_date_created': None,  # Not available in our dataset
+                'track_duration': float(song['duration']),
+                'track_tags': eval(song['track_tags']) if isinstance(song['track_tags'], str) else []
+            }
+        except Exception as e:
+            logging.error(f"Error formatting song data for ID {song_id}: {str(e)}")
+            return jsonify({
+                'error': 'Error formatting song data',
+                'details': str(e),
+                'song_id': song_id
+            }), 500
         
-        print(f"Sending response: {response_data}")
-        response = jsonify(response_data)
-        print(f"Response: {response}")
-        return response, 200
+        logging.info(f"Successfully retrieved details for song {song_id}")
+        return jsonify(response_data), 200
             
     except Exception as e:
-        print(f"Server error in get_song_details: {str(e)}")
+        logging.error(f"Error retrieving song {song_id}: {str(e)}")
         return jsonify({
             'error': 'Server error',
-            'details': str(e)
+            'details': str(e),
+            'song_id': song_id
         }), 500
 
 @music_bp.route('/popular')

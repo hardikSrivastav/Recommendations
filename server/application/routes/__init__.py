@@ -49,12 +49,13 @@ def create_app(testing: bool = False):
     from .recommendation_routes import recommendation_bp
     from .feedback_routes import feedback_bp
     from .auth_routes import auth_bp
+    from .training_routes import training_bp
 
     # Initialize database service
     db_service = DatabaseService(testing=testing)
 
     # Initialize blueprints with database service
-    for route in [user_bp, music_bp, recommendation_bp, feedback_bp, auth_bp]:
+    for route in [user_bp, music_bp, recommendation_bp, feedback_bp, auth_bp, training_bp]:
         if hasattr(route, 'init_db'):
             route.init_db(testing=testing)
 
@@ -64,5 +65,52 @@ def create_app(testing: bool = False):
     app.register_blueprint(recommendation_bp, url_prefix='/api/recommendations')
     app.register_blueprint(feedback_bp, url_prefix='/api/feedback')
     app.register_blueprint(auth_bp, url_prefix='/api')
+    app.register_blueprint(training_bp, url_prefix='/api/training')
 
-    return app 
+    return app
+
+# Import all route blueprints
+from flask import request
+from .auth_routes import auth_bp
+from .feedback_routes import feedback_bp
+from .recommendation_routes import recommendation_bp
+from .user_routes import user_bp
+from .music_routes import music_bp
+from .training_routes import training_bp
+
+# Initialize route modules that need initialization
+def init_routes(testing=False):
+    """Initialize all route modules that require initialization."""
+    from .auth_routes import init_db as init_auth
+    from .music_routes import init_services as init_music
+    from .recommendation_routes import init_db as init_recommendations
+    from .feedback_routes import init_db as init_feedback
+    from .training_routes import init_services as init_training
+
+    # Add CORS headers to all blueprint responses
+    for bp in [auth_bp, feedback_bp, recommendation_bp, user_bp, music_bp, training_bp]:
+        @bp.after_request
+        def add_cors_headers(response):
+            origin = request.headers.get('Origin')
+            if origin in ["http://localhost:3000", "http://localhost:3001"]:
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Session-ID'
+            return response
+
+    init_auth(testing)
+    init_music(testing)
+    init_recommendations(testing)
+    init_feedback(testing)
+    init_training(testing)
+
+__all__ = [
+    'auth_bp',
+    'feedback_bp',
+    'recommendation_bp',
+    'user_bp',
+    'music_bp',
+    'training_bp',
+    'init_routes'
+] 

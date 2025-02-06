@@ -1,5 +1,5 @@
 import { SongCard, type Song } from "./SongCard";
-import { Music2 } from "lucide-react";
+import { Music2, Loader2 } from "lucide-react";
 
 interface ListeningHistoryProps {
   songs: Song[];
@@ -19,20 +19,20 @@ export function ListeningHistory({
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-gray-400 text-center">
-            Loading your listening history...
-          </p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-primary/60" />
+          <p className="text-sm text-gray-400">Loading your listening history...</p>
         </div>
       );
     }
 
     if (error) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <Music2 className="h-12 w-12 text-gray-500/50" />
-          <p className="text-gray-400 text-center">
-            Add your demographics, then start adding songs to your history
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <Music2 className="h-8 w-8 text-gray-500/50" />
+          <p className="text-center text-sm">
+            Add your demographics, then start adding songs to your history<br />
+            <span className="text-xs text-gray-500">Your listening history will appear here</span>
           </p>
         </div>
       );
@@ -40,19 +40,19 @@ export function ListeningHistory({
 
     if (!songs.length) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <Music2 className="h-12 w-12 text-gray-500/50" />
-          <p className="text-gray-400 text-center">
-            Your listening history will appear here<br />
-            once you start adding songs
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <Music2 className="h-8 w-8 text-gray-500/50" />
+          <p className="text-center text-sm">
+            Start adding songs to your history<br />
+            <span className="text-xs text-gray-500">Your listening history will appear here</span>
           </p>
         </div>
       );
     }
 
     return (
-      <div className="flex-1 min-h-0 overflow-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-        <div className="space-y-3 pr-2">
+      <div className="flex-1 min-h-0 overflow-auto">
+        <div className="space-y-2">
           {songs.map((song) => (
             <SongCard
               key={song.id}

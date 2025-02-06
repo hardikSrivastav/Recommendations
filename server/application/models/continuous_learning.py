@@ -98,7 +98,14 @@ class ContinuousLearningManager:
         self.training_queue = asyncio.Queue()
         self.feedback_collector = FeedbackCollector(max_size=config.max_queue_size)
         self.is_training = False
+        self.last_training_time = None  # Add tracking for last training time
         
+    async def get_last_training_time(self) -> str:
+        """Get the timestamp of the last training run."""
+        if self.last_training_time is None:
+            return "Never"
+        return self.last_training_time.isoformat()
+
     async def start(self):
         """Start the continuous learning process."""
         await asyncio.gather(
@@ -169,6 +176,9 @@ class ContinuousLearningManager:
             loss.backward()
             optimizer.step()
             
+            # Update last training time
+            self.last_training_time = datetime.now()
+            
             logging.info(
                 f"Completed incremental training on {len(training_data)} samples"
             )
@@ -179,4 +189,52 @@ class ContinuousLearningManager:
             
     def add_feedback(self, feedback: UserFeedback):
         """Add new user feedback."""
-        self.feedback_collector.add_feedback(feedback) 
+        self.feedback_collector.add_feedback(feedback)
+
+    async def should_train(self) -> bool:
+        """Check if training conditions are met."""
+        try:
+            # Check if we're already training
+            if self.is_training:
+                logging.info("Training conditions not met: Model is currently training")
+                return False
+
+            # Check if we have enough feedback samples
+            feedback = await self.feedback_collector.collect_recent_feedback()
+            if len(feedback) < self.config.min_feedback_samples:
+                logging.info(f"Training conditions not met: Not enough feedback samples (have {len(feedback)}, need {self.config.min_feedback_samples})")
+                return False
+
+            # Check if enough time has passed since last training
+            if self.last_training_time is not None:
+                time_since_last = datetime.now() - self.last_training_time
+                if time_since_last < self.config.training_interval:
+                    logging.info(f"Training conditions not met: Not enough time since last training (need {self.config.training_interval}, only been {time_since_last})")
+                    return False
+
+            # Check if training queue is not full
+            queue_size = self.training_queue.qsize()
+            if queue_size >= self.config.max_queue_size:
+                logging.info(f"Training conditions not met: Training queue is full (size: {queue_size}, max: {self.config.max_queue_size})")
+                return False
+
+            logging.info("All training conditions met!")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error checking training conditions: {str(e)}")
+            return False
+
+    async def execute_training_cycle(self):
+        """Execute a single training cycle."""
+        try:
+            feedback = await self.feedback_collector.collect_recent_feedback()
+            if len(feedback) >= self.config.min_feedback_samples:
+                training_data = self.feedback_collector._convert_to_training_data(feedback)
+                await self.training_queue.put(training_data)
+                logging.info(f"Queued training cycle with {len(training_data)} samples")
+            else:
+                logging.warning("Not enough samples for training cycle")
+        except Exception as e:
+            logging.error(f"Error executing training cycle: {str(e)}")
+            raise 

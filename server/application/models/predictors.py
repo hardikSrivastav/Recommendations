@@ -60,6 +60,7 @@ class DemographicPredictor:
                 age_diff = abs(float(user_demographics.get('age_group_encoded', 0)) - 
                              float(other_demographics.get('age_group_encoded', 0)))
                 age_sim = 1.0 - (age_diff / 4)  # 4 is max possible difference
+                # 0 < age_sim < 1
                 similarity += weights['age_group'] * age_sim
         except (KeyError, TypeError, ValueError):
             # If age group comparison fails, use a default similarity
@@ -98,6 +99,7 @@ class DemographicPredictor:
             return pd.DataFrame(columns=['user_id', 'similarity'])
         
         for _, other_user in all_demographics.iterrows():
+            # Run through each user (other_user) in database of all users
             if other_user['user_id'] != user_demographics['user_id']:
                 similarity = self._calculate_demographic_similarity(
                     user_demographics,
@@ -122,6 +124,7 @@ class DemographicPredictor:
         """
         song_scores = defaultdict(float)
         total_similarity = similar_users['similarity'].sum()
+        # Total similarity scores of all similar users (other users) to the target user
         
         if total_similarity == 0:
             # If no similar users found, return default scores
@@ -131,8 +134,9 @@ class DemographicPredictor:
             return {}
         
         for _, similar_user in similar_users.iterrows():
+            # Get the listening history of the similar user
             user_history = listening_history[
-                listening_history['user_id'] == similar_user['user_id']
+                listening_history['user_id'] == similar_user['user_id'] #Only where the user_id of the listening history matches the user_id of the similar user
             ]
             
             # Weight each song by user similarity
@@ -152,13 +156,13 @@ class DemographicPredictor:
         Generate predictions based on demographic similarity.
         Returns dict of song_id -> score mappings.
         """
-        # Handle bootstrap case
+        # Handle bootstrap (first time running the model) case
         if all_demographics is None or all_demographics.empty:
             logging.warning("No demographic data available for comparison")
             # Return default scores for recent songs
             if not listening_history.empty:
                 unique_songs = listening_history['song_id'].unique()
-                return {str(song_id): 0.5 for song_id in unique_songs}
+                return {str(song_id): 0.5 for song_id in unique_songs} #Default medium score = 0.5
             return {}
             
         # Find similar users
@@ -239,7 +243,7 @@ class PopularityPredictor:
             for _, interaction in song_history.iterrows():
                 try:
                     age_days = (current_time - pd.to_datetime(interaction['timestamp'])).days
-                    if age_days <= self.max_age_days:
+                    if age_days <= self.max_age_days: #only process if the interaction with the song is less than 30 days old
                         weight = self._calculate_time_weight(age_days)
                         song_scores[str(song_id)] += weight
                         total_weight += 1
@@ -250,7 +254,7 @@ class PopularityPredictor:
             
             # Normalize by number of interactions
             if total_weight > 0:
-                song_scores[str(song_id)] /= total_weight
+                song_scores[str(song_id)] /= total_weight #Normalize by number of interactions
         
         # If no scores calculated, give equal base scores
         if not song_scores and unique_songs.size > 0:
@@ -278,7 +282,7 @@ class PopularityPredictor:
         Uses demographic similarity to weight song preferences.
         """
         if not user_context or 'demographics' not in user_context:
-            return song_scores
+            return song_scores #Return the song scores as is if no user context or demographics
             
         demographic_predictor = DemographicPredictor()
         similar_users = demographic_predictor._find_similar_users(
@@ -287,7 +291,7 @@ class PopularityPredictor:
         )
         
         if similar_users.empty:
-            return song_scores
+            return song_scores #Return the song scores as is if no similar users found
             
         # Adjust scores based on demographic preferences
         adjusted_scores = {}

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { recommendationsAPI, musicAPI } from "@/services/api"
 import { SongCard, type Song } from "./SongCard"
 import { Button } from "@/components/ui/button"
-import { Code, List, Loader2, Star, StarOff } from "lucide-react"
+import { Code, List, Loader2, Star, StarOff, Music2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   Select,
