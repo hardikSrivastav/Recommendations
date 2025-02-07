@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Song } from '@/components/SongCard';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -89,6 +90,7 @@ export interface RecommendationResponse {
     was_shown: boolean;
     was_selected: boolean;
   }>;
+  songDetails?: Record<string, Song>;
 }
 
 export const recommendationsAPI = {

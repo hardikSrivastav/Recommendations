@@ -22,6 +22,9 @@ class FMADatasetProcessor:
             tracks = self.pg_service.get_tracks()
             if not tracks.empty:
                 logging.info("Retrieved tracks from PostgreSQL")
+                logging.info(f"Tracks shape: {tracks.shape}")
+                logging.info(f"Tracks columns: {tracks.columns.tolist()}")
+                logging.info(f"Sample track data:\n{tracks.iloc[0].to_dict()}")
                 return tracks
                 
             logging.info(f"Loading tracks from {self.tracks_path}")
@@ -35,6 +38,7 @@ class FMADatasetProcessor:
                 raise ValueError("Loaded tracks DataFrame is empty")
                 
             logging.info(f"Tracks loaded successfully: {tracks.shape}")
+            logging.info(f"Original columns: {tracks.columns.tolist()}")
             
             # Create a new DataFrame with flattened columns
             processed = pd.DataFrame(index=tracks.index)
@@ -48,6 +52,10 @@ class FMADatasetProcessor:
                 processed['duration'] = tracks[('track', 'duration')]
                 processed['track_tags'] = tracks[('track', 'tags')]
                 processed['album_title'] = tracks[('album', 'title')]
+                
+                logging.info("Successfully extracted columns")
+                logging.info(f"Processed columns: {processed.columns.tolist()}")
+                
             except KeyError as e:
                 logging.warning(f"Some columns not found: {e}")
             
@@ -65,10 +73,14 @@ class FMADatasetProcessor:
             # Convert lists represented as strings to actual lists
             for col in ['track_genres', 'track_tags']:
                 processed[col] = processed[col].apply(lambda x: str(x) if isinstance(x, (list, str)) else '[]')
+                # Log sample of processed lists
+                sample_values = processed[col].head()
+                logging.info(f"Sample {col} values:\n{sample_values}")
             
             # Store in PostgreSQL for future use
             self.pg_service.store_tracks(processed)
             logging.info(f"Successfully processed and stored {len(processed)} tracks")
+            logging.info(f"Final processed data sample:\n{processed.iloc[0].to_dict()}")
             
             return processed
             

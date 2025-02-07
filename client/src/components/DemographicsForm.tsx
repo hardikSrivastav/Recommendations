@@ -75,16 +75,16 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
           <Button
             variant="secondary"
             onClick={handleEditClick}
-            size="sm"
-            className="text-sm"
+            size="lg"
+            className="text-lg"
           >
             Edit Demographics
           </Button>
           <Button
             variant="destructive"
             onClick={handleForgetMe}
-            size="sm"
-            className="text-sm"
+            size="lg"
+            className="text-lg"
           >
             Forget Me
           </Button>

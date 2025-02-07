@@ -27,6 +27,7 @@ interface PredictionResponse {
     was_shown: boolean;
     was_selected: boolean;
   }>;
+  songDetails?: Record<string, Song>;
 }
 
 interface PredictionDisplayProps {
@@ -136,9 +137,18 @@ export function PredictionDisplay({
         if (response.data && response.data.predictions) {
           console.log('Received predictions:', response.data);
           
-          // Get song details for all predictions
-          const songIds = response.data.predictions.map(p => p.song_id);
-          const details = await fetchSongDetails(songIds);
+          let details: Record<string, Song> = {};
+          
+          // If we're using cache and the response includes cached song details, use those
+          if (!force && isCaching && response.data.songDetails) {
+            console.log('Using cached song details');
+            details = response.data.songDetails;
+          } else {
+            // Otherwise fetch fresh song details
+            console.log('Fetching fresh song details');
+            const songIds = response.data.predictions.map(p => p.song_id);
+            details = await fetchSongDetails(songIds);
+          }
           
           // Filter predictions to only include songs we found details for
           const validPredictions = response.data.predictions.filter(p => details[p.song_id]);
@@ -151,10 +161,13 @@ export function PredictionDisplay({
           }
 
           // Update the predictions with only the valid ones
-          setPredictions({
+          const finalResponse = {
             ...response.data,
-            predictions: finalPredictions
-          });
+            predictions: finalPredictions,
+            songDetails: details  // Include song details in the cached data
+          };
+          
+          setPredictions(finalResponse);
           
           // Only keep details for the final predictions
           const finalDetails: Record<string, Song> = {};
@@ -165,12 +178,9 @@ export function PredictionDisplay({
 
           // Cache predictions if caching is enabled
           if (isCaching && !force) {
-            console.log('Caching predictions in Redis');
+            console.log('Caching predictions and song details in Redis');
             try {
-              await recommendationsAPI.cachePredictions({
-                ...response.data,
-                predictions: finalPredictions
-              });
+              await recommendationsAPI.cachePredictions(finalResponse);
             } catch (error) {
               console.error('Failed to cache predictions:', error);
               toast.error('Failed to cache predictions');
@@ -378,8 +388,12 @@ export function PredictionDisplay({
                   );
                 })
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 text-center">
-                  No predictions available. Add some songs to your history to get started.
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <Music2 className="h-12 w-12 text-gray-500/50" />
+                  <p className="text-gray-400 text-center">
+                    Your song predictions will appear here<br />
+                    once you add songs to your history
+                  </p>
                 </div>
               )}
             </div>

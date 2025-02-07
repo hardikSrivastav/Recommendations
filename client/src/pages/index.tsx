@@ -6,8 +6,8 @@ import { useState, useEffect, useRef } from "react"
 import { userAPI, feedbackAPI } from "@/services/api"
 import { useRouter } from 'next/router'
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Lock, Unlock, Check } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { RefreshCw, Lock } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Song {
   track_title: string;
@@ -24,8 +24,6 @@ export default function HomePage() {
   const [demographics, setDemographics] = useState<any>(null);
   const [isEditingDemographics, setIsEditingDemographics] = useState(false);
   const regeneratePredictionsRef = useRef<(() => void) | undefined>();
-  const [isUnlocking, setIsUnlocking] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const isDemographicsSet = demographics !== null;
 
@@ -55,24 +53,11 @@ export default function HomePage() {
 
   const handleDemographicsSubmit = async (data: any) => {
     try {
-      setIsUnlocking(true);
       const response = await userAPI.updateDemographics(data);
-      
-      // Show unlocking animation
-      setTimeout(() => {
-        setShowSuccess(true);
-        // Hide success and complete unlock after animation
-        setTimeout(() => {
-          setDemographics(response.data.data);
-          setIsEditingDemographics(false);
-          setShowSuccess(false);
-          setIsUnlocking(false);
-        }, 1000);
-      }, 500);
-      
+      setDemographics(response.data.data);
+      setIsEditingDemographics(false);
     } catch (error) {
       console.error('Failed to update demographics:', error);
-      setIsUnlocking(false);
     }
   };
 
@@ -134,45 +119,13 @@ export default function HomePage() {
     if (isDemographicsSet) return null;
     
     return (
-      <div 
-        className={cn(
-          "absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl",
-          "transition-all duration-500 ease-in-out",
-          isUnlocking && "backdrop-blur-none bg-black/0",
-          showSuccess && "bg-emerald-500/20"
-        )}
-      >
-        <div className={cn(
-          "flex flex-col items-center gap-3 p-6 text-center",
-          "transition-all duration-500 transform",
-          isUnlocking && !showSuccess && "scale-90 opacity-0",
-          showSuccess && "scale-110"
-        )}>
-          {showSuccess ? (
-            <>
-              <div className="h-8 w-8 rounded-full bg-emerald-500/20 p-1.5">
-                <Check className="h-full w-full text-emerald-500" />
-              </div>
-              <p className="text-emerald-500">Unlocked!</p>
-            </>
-          ) : (
-            <>
-              <div className={cn(
-                "transition-transform duration-500",
-                isUnlocking && "rotate-12"
-              )}>
-                {isUnlocking ? (
-                  <Unlock className="h-8 w-8 text-gray-400" />
-                ) : (
-                  <Lock className="h-8 w-8 text-gray-400" />
-                )}
-              </div>
-              <p className="text-gray-200">
-                Please fill out your demographics first<br />
-                <span className="text-sm text-gray-400">This helps us provide better recommendations</span>
-              </p>
-            </>
-          )}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
+        <div className="flex flex-col items-center gap-3 p-6 text-center">
+          <Lock className="h-8 w-8 text-gray-400" />
+          <p className="text-gray-200">
+            Please fill out your demographics first<br />
+            <span className="text-sm text-gray-400">This helps us provide better recommendations</span>
+          </p>
         </div>
       </div>
     );
@@ -184,10 +137,11 @@ export default function HomePage() {
         <div className="text-center mb-6 flex-none">
           <h1 className="text-4xl font-black brand-text mb-2">
             prdct
-          </h1>
+          </h1> <ThemeToggle />
           <p className="text-lg text-gray-300 max-w-2xl mx-auto">
             Add songs to your listening history and get recommendations based on your music tastes
           </p>
+          
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
