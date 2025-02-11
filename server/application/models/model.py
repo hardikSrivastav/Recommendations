@@ -11,6 +11,8 @@ from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from datetime import datetime
 from application.models.fma_dataset_processor import FMADatasetProcessor
+from application.models.predictors import PopularityPredictor
+from application.models.predictors import DemographicPredictor
 
 # Configure logging
 logging.basicConfig(

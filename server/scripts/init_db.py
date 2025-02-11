@@ -39,4 +39,9 @@ def init_database():
         raise
 
 if __name__ == "__main__":
-    init_database() 
+    try:
+        init_database()
+        logger.info("Database initialization completed successfully!")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        sys.exit(1) 
