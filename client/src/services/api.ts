@@ -23,7 +23,8 @@ const api = axios.create({
 
 // Add session ID to every request
 api.interceptors.request.use((config) => {
-  config.headers['X-Session-ID'] = getSessionId();
+  const sessionId = localStorage.getItem('user_id') || getSessionId();
+  config.headers['X-Session-ID'] = sessionId;
   return config;
 }, (error) => {
   return Promise.reject(error);
@@ -31,9 +32,10 @@ api.interceptors.request.use((config) => {
 
 // Handle session ID from response
 api.interceptors.response.use((response) => {
-  const sessionId = response.headers['x-session-id'];
-  if (sessionId) {
-    localStorage.setItem('session_id', sessionId);
+  const newSessionId = response.data?.new_user_id;
+  if (newSessionId) {
+    localStorage.setItem('user_id', newSessionId);
+    localStorage.setItem('session_id', newSessionId);
   }
   return response;
 }, (error) => {
@@ -58,6 +60,9 @@ export const userAPI = {
     api.put('/users/demographics', data),
   deleteUserData: () =>
     api.delete('/users/account'),
+  anonymizeUserData: () => {
+    return api.post('/users/anonymize');
+  },
 };
 
 // Music API

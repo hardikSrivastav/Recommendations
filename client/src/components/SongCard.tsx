@@ -41,42 +41,43 @@ export function SongCard({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl bg-gradient-to-br from-background/90 to-background/60 backdrop-blur-sm",
-        "border border-white/10 hover:border-white/20 transition-all duration-300",
+        "group relative overflow-hidden rounded-xl",
+        "bg-background/80 backdrop-blur-sm",
+        "border border-border hover:border-primary/20 transition-all duration-300",
         "shadow-lg hover:shadow-xl",
         className
       )}
     >
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
       <div className={cn(
-        "flex items-start gap-4 p-4",
+        "flex items-start gap-4",
         isCompact ? "p-3" : "p-4"
       )}>
         <div className={cn(
-          "flex-shrink-0 rounded-lg bg-primary/10 flex items-center justify-center",
+          "flex-shrink-0 rounded-lg bg-primary/5 flex items-center justify-center",
           isCompact ? "w-10 h-10" : "w-12 h-12"
         )}>
           <Music className={cn(
-            "text-primary/60",
+            "text-primary/40",
             isCompact ? "h-5 w-5" : "h-6 w-6"
           )} />
         </div>
 
         <div className="flex-grow min-w-0">
           <h3 className={cn(
-            "font-semibold text-white truncate",
+            "font-semibold text-foreground truncate",
             isCompact ? "text-base" : "text-lg"
           )}>
             {song.track_title}
           </h3>
           
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-gray-400 text-sm truncate">
+            <span className="text-muted-foreground text-sm truncate">
               {song.artist_name}
             </span>
-            <span className="text-gray-600">•</span>
-            <span className="text-gray-400 text-sm truncate">
+            <span className="text-border">•</span>
+            <span className="text-muted-foreground text-sm truncate">
               {song.album_title}
             </span>
           </div>
@@ -86,13 +87,13 @@ export function SongCard({
               {song.track_genres?.map((genre, index) => (
                 <span
                   key={index}
-                  className="px-2 py-1 rounded-full bg-primary/10 text-primary-foreground/60 text-xs"
+                  className="px-2 py-1 rounded-full bg-primary/5 text-primary/80 text-xs"
                 >
                   {genre}
                 </span>
               ))}
               {song.track_duration && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-secondary/10 text-secondary-foreground/60 text-xs">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-secondary/5 text-secondary-foreground/80 text-xs">
                   <Clock className="h-3 w-3" />
                   {formatDuration(song.track_duration)}
                 </span>
@@ -100,7 +101,7 @@ export function SongCard({
               {song.tags?.map((tag, index) => (
                 <span
                   key={index}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent-foreground/60 text-xs"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/5 text-accent-foreground/80 text-xs"
                 >
                   <Tag className="h-3 w-3" />
                   {tag}
@@ -112,14 +113,10 @@ export function SongCard({
 
         {showAction && onAction && (
           <Button
-            variant="secondary"
-            size={isCompact ? "sm" : "default"}
+            variant="ghost"
+            size="sm"
             onClick={() => onAction(song)}
-            className={cn(
-              "flex-shrink-0 transition-transform duration-300",
-              "opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100",
-              isCompact ? "ml-2" : "ml-4"
-            )}
+            className="flex-none ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300"
           >
             {actionLabel}
           </Button>

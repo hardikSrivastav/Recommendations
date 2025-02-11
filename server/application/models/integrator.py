@@ -9,6 +9,7 @@ import logging
 from sklearn.preprocessing import LabelEncoder
 from application.database import DatabaseService
 from application.database.postgres_service import PostgresService
+from sqlalchemy import text
 
 class IntegratedMusicRecommender:
     def __init__(self, base_dir='./fma_metadata'):
@@ -213,16 +214,43 @@ class IntegratedMusicRecommender:
             # Convert MongoDB history to DataFrame
             listening_history = pd.DataFrame(actual_history) if actual_history else pd.DataFrame()
             
-            # Get user's demographics
-            user_demographics = db_service.get_user_profile(str(user_id))
+            # Get user's demographics from PostgreSQL
+            user_demographics = db_service.get_demographics(str(user_id))
             has_demographics = bool(user_demographics and len(user_demographics) > 0)
             
-            # Get all users' demographics for demographic predictor
-            all_users_demographics = []
-            for user_doc in db_service.mongodb.demographics.find():
-                user_doc.pop('_id', None)  # Remove MongoDB ID
-                all_users_demographics.append(user_doc)
-            demographics_df = pd.DataFrame(all_users_demographics) if all_users_demographics else None
+            # Get all users' demographics from PostgreSQL
+            session = db_service.Session()
+            try:
+                # Query all demographics
+                query = text("""
+                    SELECT 
+                        user_id,
+                        age,
+                        gender,
+                        location,
+                        occupation,
+                        created_at,
+                        updated_at
+                    FROM user_demographics
+                """)
+                result = session.execute(query)
+                
+                # Convert to list of dicts
+                all_users_demographics = [
+                    {
+                        'user_id': row.user_id,
+                        'age': row.age,
+                        'gender': row.gender,
+                        'location': row.location,
+                        'occupation': row.occupation
+                    }
+                    for row in result
+                ]
+                
+                demographics_df = pd.DataFrame(all_users_demographics) if all_users_demographics else None
+                logging.info(f"Loaded {len(all_users_demographics)} user demographics from PostgreSQL")
+            finally:
+                session.close()
             
             # Determine cold start based on both history and demographics
             is_cold_start = not (has_listening_history and has_demographics)
@@ -238,12 +266,7 @@ class IntegratedMusicRecommender:
                         'age_group': '25-34',  # Default age group
                         'gender': 'unknown',
                         'location': 'unknown',
-                        'occupation': 'unknown',
-                        # Add encoded values directly
-                        'age_group_encoded': 1,  # Encode '25-34'
-                        'gender_encoded': 0,     # Encode 'unknown'
-                        'location_encoded': 0,   # Encode 'unknown'
-                        'occupation_encoded': 0  # Encode 'unknown'
+                        'occupation': 'unknown'
                     }
                     
                     # Add to demographics_df if it exists
@@ -254,7 +277,7 @@ class IntegratedMusicRecommender:
                         ], ignore_index=True)
                     else:
                         demographics_df = pd.DataFrame([user_demographics])
-                        
+                
                 # Set predictor weights for cold start
                 predictor_weights = {
                     'model': 0.2,      # Lower weight for model in cold start
@@ -314,6 +337,7 @@ class IntegratedMusicRecommender:
                     )
                 except Exception as e:
                     logging.warning(f"Demographic predictions failed: {str(e)}")
+                    logging.warning(f"Demographics data: user={user_demographics}, all={demographics_df.head()}")
             
             # 3. Popularity predictions
             popularity_scores = {}

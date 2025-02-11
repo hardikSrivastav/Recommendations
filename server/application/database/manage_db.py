@@ -4,7 +4,8 @@ import sys
 import click
 from pymongo import MongoClient
 import redis
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 # Add the server directory to Python path
 SERVER_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -29,6 +30,80 @@ REDIS_URL = "redis://:music_password@localhost:6380/0"
 def cli():
     """Database management commands."""
     pass
+
+@cli.command()
+def view_demographics():
+    """View all user demographics from PostgreSQL."""
+    click.echo("Fetching user demographics from PostgreSQL...")
+    engine = create_engine(POSTGRES_URL)
+    
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                SELECT 
+                    user_id,
+                    age,
+                    gender,
+                    location,
+                    occupation,
+                    created_at,
+                    updated_at
+                FROM user_demographics
+                ORDER BY created_at DESC
+            """)
+            
+            result = conn.execute(query)
+            
+            # Convert to list to get row count
+            rows = list(result)
+            
+            if not rows:
+                click.echo("No user demographics found.")
+                return
+                
+            click.echo(f"\nFound {len(rows)} user(s):\n")
+            
+            # Print each row in a formatted way
+            for row in rows:
+                click.echo("-" * 50)
+                click.echo(f"User ID: {row.user_id}")
+                click.echo(f"Age: {row.age}")
+                click.echo(f"Gender: {row.gender}")
+                click.echo(f"Location: {row.location}")
+                click.echo(f"Occupation: {row.occupation}")
+                click.echo(f"Created: {row.created_at}")
+                click.echo(f"Updated: {row.updated_at}")
+            
+            click.echo("-" * 50)
+            
+    except SQLAlchemyError as e:
+        click.echo(f"Database error: {str(e)}")
+        raise
+    except Exception as e:
+        click.echo(f"Error fetching demographics: {str(e)}")
+        raise
+
+@cli.command()
+def migrate():
+    """Migrate database schema to latest version."""
+    click.echo("Migrating PostgreSQL schema...")
+    engine = create_engine(POSTGRES_URL)
+    
+    # Drop and recreate the user_demographics table
+    with engine.connect() as conn:
+        conn.execute("DROP TABLE IF EXISTS user_demographics CASCADE")
+        conn.execute("""
+            CREATE TABLE user_demographics (
+                user_id VARCHAR(50) PRIMARY KEY,
+                age INTEGER NOT NULL,
+                gender VARCHAR(10) NOT NULL,
+                location VARCHAR(2) NOT NULL,
+                occupation VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    click.echo("Migration completed successfully.")
 
 @cli.command()
 def init():

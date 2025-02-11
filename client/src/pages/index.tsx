@@ -2,12 +2,14 @@ import { DemographicsForm } from "@/components/DemographicsForm"
 import { SongSearch } from "@/components/SongSearch"
 import { ListeningHistory } from "@/components/ListeningHistory"
 import { PredictionDisplay } from "@/components/PredictionDisplay"
+import { HowItWorksModal } from "@/components/HowItWorksModal"
 import { useState, useEffect, useRef } from "react"
 import { userAPI, feedbackAPI } from "@/services/api"
 import { useRouter } from 'next/router'
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Lock } from "lucide-react"
+import { RefreshCw, Lock, HelpCircle } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { toast } from "sonner"
 
 interface Song {
   track_title: string;
@@ -24,6 +26,7 @@ export default function HomePage() {
   const [demographics, setDemographics] = useState<any>(null);
   const [isEditingDemographics, setIsEditingDemographics] = useState(false);
   const regeneratePredictionsRef = useRef<(() => void) | undefined>();
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   const isDemographicsSet = demographics !== null;
 
@@ -63,23 +66,40 @@ export default function HomePage() {
 
   const handleForgetMe = async () => {
     try {
-      // Delete user data
-      await userAPI.deleteUserData();
+      // Call the API to anonymize user data and get new session user ID
+      const response = await userAPI.anonymizeUserData();
+      const newUserId = response.data.new_user_id;
       
       // Clear local state
       setDemographics(null);
       setListeningHistory([]);
       
-      // Clear any stored session/tokens
-      localStorage.removeItem('token');
-      sessionStorage.clear();
+      // Clear any stored predictions cache
+      localStorage.removeItem('predictions_cached');
       
-      // Redirect to login page or home
-      router.push('/');
+      // Update session with new user ID
+      if (newUserId) {
+        localStorage.setItem('user_id', newUserId);
+        localStorage.setItem('session_id', newUserId);
+        
+        // Clear any other user-specific data from localStorage
+        const keysToKeep = ['theme'];
+        Object.keys(localStorage).forEach(key => {
+          if (!keysToKeep.includes(key)) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+      
+      // Show success message
+      toast.success('Your data has been anonymized and a new session started');
+      
+      // Refresh the page to reset all components with new user ID
+      window.location.reload();
       
     } catch (error) {
-      console.error('Failed to delete user data:', error);
-      setError('Failed to delete user data. Please try again.');
+      console.error('Failed to anonymize user data:', error);
+      toast.error('Failed to reset your data. Please try again.');
     }
   };
 
@@ -132,22 +152,35 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen gradient-dark">
-      <div className="container mx-auto px-6 py-8 flex flex-col">
-        <div className="text-center mb-6 flex-none">
-          <h1 className="text-4xl font-black brand-text mb-2">
+    <main className="min-h-screen gradient-background">
+      <div className="container mx-auto px-6 py-8 flex flex-col min-h-screen">
+        <div className="text-center mb-6 flex-none flex items-center justify-center gap-4">
+          <h1 className="text-6xl font-black brand-text mb-2">
             prdct
-          </h1> <ThemeToggle />
-          <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-            Add songs to your listening history and get recommendations based on your music tastes
-          </p>
-          
+          </h1>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowHowItWorks(true)}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <HelpCircle className="h-4 w-4" />
+              How it Works
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
+        
+        <HowItWorksModal 
+          open={showHowItWorks} 
+          onOpenChange={setShowHowItWorks} 
+        />
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
           <div className="space-y-6 h-full flex flex-col">
             <div className="p-6 rounded-xl gradient-card glow-border flex-none">
-              <h2 className="text-2xl font-semibold mb-6 text-white">Your Profile</h2>
+              <h2 className="text-2xl font-semibold mb-6 text-foreground/90">Your Profile</h2>
               <div>
                 <DemographicsForm 
                   onSubmit={handleDemographicsSubmit}
@@ -158,28 +191,29 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Show Predictions here by default */}
             {!isEditingDemographics && (
-              <div className="p-6 rounded-xl gradient-card glow-border flex-none relative">
+              <div className="p-6 rounded-xl gradient-card glow-border flex-1 min-h-[500px] flex flex-col relative">
                 {renderLockedOverlay()}
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-white">Predictions</h2>
+                  <h2 className="text-2xl font-semibold text-foreground/90">Predictions</h2>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleRegeneratePredictions}
-                    className="hover:bg-white/10"
+                    className="hover:bg-accent"
                     disabled={!isDemographicsSet}
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Regenerate
                   </Button>
                 </div>
-                <PredictionDisplay 
-                  listeningHistory={listeningHistory}
-                  onAddToHistory={handleAddToHistory}
-                  regenerateRef={regeneratePredictionsRef}
-                />
+                <div className="flex-1 min-h-0">
+                  <PredictionDisplay 
+                    listeningHistory={listeningHistory}
+                    onAddToHistory={handleAddToHistory}
+                    regenerateRef={regeneratePredictionsRef}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -187,7 +221,7 @@ export default function HomePage() {
           <div className="space-y-6 h-full flex flex-col">
             <div className="p-6 rounded-xl gradient-card glow-border flex-none relative">
               {renderLockedOverlay()}
-              <h2 className="text-2xl font-semibold mb-4 text-white">Track Your Music</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-foreground/90">Track Your Music</h2>
               <div className="h-[300px]">
                 <SongSearch 
                   onAddToHistory={handleAddToHistory}
@@ -206,28 +240,29 @@ export default function HomePage() {
               />
             </div>
 
-            {/* Show Predictions here when in edit mode */}
             {isEditingDemographics && (
-              <div className="p-6 rounded-xl gradient-card glow-border flex-none relative">
+              <div className="p-6 rounded-xl gradient-card glow-border flex-none">
                 {renderLockedOverlay()}
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-white">Predictions</h2>
+                  <h2 className="text-2xl font-semibold text-foreground/90">Predictions</h2>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleRegeneratePredictions}
-                    className="hover:bg-white/10"
+                    className="hover:bg-accent"
                     disabled={!isDemographicsSet}
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Regenerate
                   </Button>
                 </div>
-                <PredictionDisplay 
-                  listeningHistory={listeningHistory}
-                  onAddToHistory={handleAddToHistory}
-                  regenerateRef={regeneratePredictionsRef}
-                />
+                <div className="flex-1 min-h-0">
+                  <PredictionDisplay 
+                    listeningHistory={listeningHistory}
+                    onAddToHistory={handleAddToHistory}
+                    regenerateRef={regeneratePredictionsRef}
+                  />
+                </div>
               </div>
             )}
           </div>

@@ -1,6 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;700;900&display=swap');
 
 @tailwind base;
@@ -81,21 +79,19 @@
 }
 
 /* Custom gradient backgrounds */
-.gradient-light {
-  background: linear-gradient(to bottom, #ffffff, #f5f5f5);
-}
-
-.gradient-dark {
-  background: linear-gradient(to bottom, #000000, #1a1a1a);
-}
-
-.gradient-card-light {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+.gradient-background {
+  @apply transition-colors duration-300;
+  background: linear-gradient(to bottom, hsl(var(--background)), hsl(var(--muted)));
 }
 
 .gradient-card {
+  @apply transition-colors duration-300;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+.light .gradient-card {
+  background: linear-gradient(145deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.05) 100%);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 /* Glow effects */
@@ -104,7 +100,7 @@
 }
 
 .dark .glow-text {
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  text-shadow: 0 0 20px rgba(251, 206, 206, 0.1);
 }
 
 .light .glow-border {
@@ -113,8 +109,8 @@
 }
 
 .dark .glow-border {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(251, 206, 206, 0.1);
+  box-shadow: 0 0 30px rgba(251, 206, 206, 0.1);
 }
 
 @keyframes gradient {
@@ -134,10 +130,7 @@
   font-weight: 800;
   text-transform: lowercase;
   letter-spacing: -0.02em;
-  background: linear-gradient(to right, #fff, #ccc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+  @apply text-primary;
   position: relative;
   display: inline-block;
 }
@@ -149,10 +142,7 @@
   top: 0;
   filter: blur(25px);
   opacity: 0.4;
-  background: linear-gradient(to right, #93c5fd, #a78bfa);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  @apply text-primary;
   z-index: -1;
 }
 

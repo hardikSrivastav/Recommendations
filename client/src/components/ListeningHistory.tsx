@@ -20,8 +20,8 @@ export function ListeningHistory({
     if (loading) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-primary/60" />
-          <p className="text-sm text-gray-400">Loading your listening history...</p>
+          <Loader2 className="h-6 w-6 animate-spin text-primary/40" />
+          <p className="text-sm text-muted-foreground">Loading your listening history...</p>
         </div>
       );
     }
@@ -29,10 +29,10 @@ export function ListeningHistory({
     if (error) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <Music2 className="h-8 w-8 text-gray-500/50" />
-          <p className="text-center text-sm">
+          <Music2 className="h-8 w-8 text-muted-foreground/30" />
+          <p className="text-center text-sm text-muted-foreground">
             Add your demographics, then start adding songs to your history<br />
-            <span className="text-xs text-gray-500">Your listening history will appear here</span>
+            <span className="text-xs text-muted-foreground/60">Your listening history will appear here</span>
           </p>
         </div>
       );
@@ -41,10 +41,10 @@ export function ListeningHistory({
     if (!songs.length) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <Music2 className="h-8 w-8 text-gray-500/50" />
-          <p className="text-center text-sm">
+          <Music2 className="h-8 w-8 text-muted-foreground/30" />
+          <p className="text-center text-sm text-muted-foreground">
             Start adding songs to your history<br />
-            <span className="text-xs text-gray-500">Your listening history will appear here</span>
+            <span className="text-xs text-muted-foreground/60">Your listening history will appear here</span>
           </p>
         </div>
       );
@@ -69,7 +69,10 @@ export function ListeningHistory({
 
   return (
     <div className="h-full flex flex-col">
-      <h2 className="text-2xl font-semibold text-white mb-4 flex-none">Listening History</h2>
+      <div className="flex justify-between items-center mb-4 flex-none">
+        <h2 className="text-2xl font-semibold text-foreground">Listening History</h2>
+        <span className="text-sm text-muted-foreground">{songs.length}/50 songs</span>
+      </div>
       {renderContent()}
     </div>
   );

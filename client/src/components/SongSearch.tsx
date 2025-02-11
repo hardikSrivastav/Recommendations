@@ -90,46 +90,46 @@ export function SongSearch({ onAddToHistory }: SongSearchProps) {
             className={cn(
               "pl-12 py-4 text-base",
               "bg-background/80 backdrop-blur-sm",
-              "border-white/10 focus:border-primary/50",
+              "border-border focus:border-primary/50",
               "transition-all duration-300",
-              "placeholder:text-gray-500"
+              "placeholder:text-muted-foreground/60"
             )}
           />
-          <Search className="absolute left-4 top-2 h-5 w-5 text-gray-400" />
+          <Search className="absolute left-4 top-2 h-5 w-5 text-muted-foreground/60" />
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden relative">
         {isLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="h-6 w-6 animate-spin text-primary/60" />
-            <p className="text-sm text-gray-400">Searching for "{searchQuery}"...</p>
+            <Loader2 className="h-6 w-6 animate-spin text-primary/40" />
+            <p className="text-sm text-muted-foreground">Searching for "{searchQuery}"...</p>
           </div>
         ) : error ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <AlertCircle className="h-6 w-6 text-red-400" />
-            <p className="text-sm text-red-400">{error}</p>
+            <AlertCircle className="h-6 w-6 text-destructive/60" />
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         ) : !hasSearched ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <Music2 className="h-8 w-8 text-gray-500/50" />
-            <p className="text-center text-sm">
+            <Music2 className="h-8 w-8 text-muted-foreground/30" />
+            <p className="text-center text-sm text-muted-foreground">
               Start typing to search for songs<br />
-              <span className="text-xs text-gray-500">Results will appear as you type</span>
+              <span className="text-xs text-muted-foreground/60">Results will appear as you type</span>
             </p>
           </div>
         ) : songs.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <Music2 className="h-6 w-6 text-gray-500/50" />
-            <p className="text-center text-sm">
+            <Music2 className="h-6 w-6 text-muted-foreground/30" />
+            <p className="text-center text-sm text-muted-foreground">
               No songs found for "{searchQuery}"<br />
-              <span className="text-xs text-gray-500">Try a different search term</span>
+              <span className="text-xs text-muted-foreground/60">Try a different search term</span>
             </p>
           </div>
         ) : (
           <div className="absolute inset-0 overflow-y-auto">
             <div className="space-y-2">
-              <p className="text-xs text-gray-400 sticky top-0 backdrop-blur-sm py-2 z-10">
+              <p className="text-xs text-muted-foreground sticky top-0 backdrop-blur-sm py-2 z-10">
                 Showing top {songs.length} of {totalResults} song{totalResults !== 1 ? 's' : ''} for "{searchQuery}"
               </p>
               <div className="space-y-2">
@@ -145,7 +145,7 @@ export function SongSearch({ onAddToHistory }: SongSearchProps) {
                 ))}
               </div>
               {totalResults > songs.length && (
-                <p className="text-xs text-gray-500 text-center py-2">
+                <p className="text-xs text-muted-foreground/60 text-center py-2">
                   {totalResults - songs.length} more result{totalResults - songs.length !== 1 ? 's' : ''} available
                 </p>
               )}

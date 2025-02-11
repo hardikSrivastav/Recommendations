@@ -16,7 +16,7 @@ class UserDemographics(Base):
     __tablename__ = 'user_demographics'
     user_id = Column(String(50), primary_key=True)
     age = Column(Integer, nullable=False)
-    gender = Column(String(2), nullable=False)
+    gender = Column(String(10), nullable=False)
     location = Column(String(2), nullable=False)
     occupation = Column(String(50), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -450,4 +450,75 @@ class DatabaseService:
             logging.info(f"Deleted {deleted} feedback entry for user {user_id} and song {song_id}")
         except Exception as e:
             logging.error(f"Error removing feedback: {str(e)}")
+            raise
+
+    def anonymize_user_data(self, user_id: str) -> str:
+        """Anonymize user data instead of deleting it to preserve training data.
+        Returns the new session user ID."""
+        new_user_id = None
+        try:
+            # Create a new session user first
+            new_user_id = self.create_session_user()
+            
+            # Anonymize MongoDB data first (this is critical)
+            # Update listening history to remove identifiable info but keep song interactions
+            self.mongodb.listening_history.update_many(
+                {'user_id': user_id},
+                {'$set': {'user_id': f'anon_{user_id}', 'anonymous': True}}
+            )
+            
+            # Update feedback to preserve ratings but remove user identity
+            self.mongodb.feedback.update_many(
+                {'user_id': user_id},
+                {'$set': {'user_id': f'anon_{user_id}', 'anonymous': True}}
+            )
+            
+            # Update predictions to mark as anonymous
+            self.mongodb.predictions.update_many(
+                {'user_id': user_id},
+                {'$set': {'user_id': f'anon_{user_id}', 'anonymous': True}}
+            )
+            
+            # Try to clear Redis cache if available
+            if self.redis:
+                try:
+                    pattern = f"*:{user_id}"
+                    keys = self.redis.keys(pattern)
+                    if keys:
+                        self.redis.delete(*keys)
+                    logging.info(f"Cleared Redis cache for user {user_id}")
+                except Exception as redis_error:
+                    logging.warning(f"Redis cache clearing failed: {str(redis_error)}")
+                    # Continue with the process even if Redis fails
+            
+            logging.info(f"Successfully anonymized data for user {user_id}")
+            return new_user_id
+        
+        except Exception as e:
+            logging.error(f"Error anonymizing user data: {str(e)}")
+            # If we created a new user but failed later, try to clean it up
+            if new_user_id:
+                try:
+                    self.mongodb.users.delete_one({'_id': new_user_id})
+                except Exception as cleanup_error:
+                    logging.error(f"Failed to clean up new user after error: {str(cleanup_error)}")
+            raise
+
+    def create_session_user(self) -> str:
+        """Create a new session user and return their ID."""
+        try:
+            # Create a new user document with minimal data
+            user_data = {
+                'created_at': datetime.utcnow(),
+                'type': 'session',
+                'status': 'active'
+            }
+            result = self.mongodb.users.insert_one(user_data)
+            new_user_id = str(result.inserted_id)
+            
+            logging.info(f"Created new session user with ID: {new_user_id}")
+            return new_user_id
+        
+        except Exception as e:
+            logging.error(f"Error creating session user: {str(e)}")
             raise

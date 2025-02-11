@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { recommendationsAPI, musicAPI } from "@/services/api"
 import { SongCard, type Song } from "./SongCard"
 import { Button } from "@/components/ui/button"
-import { Code, List, Loader2, Star, StarOff, Music2 } from "lucide-react"
+import { Code, List, Loader2, Star, StarOff, Music2, AlertCircle, Check, Copy } from "lucide-react"
 import { toast } from "sonner"
 import {
   Select,
@@ -252,50 +252,14 @@ export function PredictionDisplay({
         })
         .catch(err => {
           console.error('Failed to copy:', err);
+          toast.error('Failed to copy to clipboard');
         });
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-white" />
-        <span className="ml-2 text-white">Loading predictions...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-red-400 p-4 rounded-lg bg-red-900/20 border border-red-900">
-        {error}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 bg-gray-800/50 rounded-lg p-1">
-          <Button
-            variant={viewMode === 'json' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('json')}
-            className="gap-2"
-          >
-            <Code className="h-4 w-4" />
-            JSON
-          </Button>
-          <Button
-            variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('cards')}
-            className="gap-2"
-          >
-            <List className="h-4 w-4" />
-            Cards
-          </Button>
-        </div>
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -305,12 +269,12 @@ export function PredictionDisplay({
             title={isCaching ? "Predictions are being remembered" : "Click to remember these predictions"}
           >
             {isCaching ? (
-              <Star className="h-4 w-4 text-yellow-400" />
+              <Star className="h-4 w-4 text-primary" />
             ) : (
-              <StarOff className="h-4 w-4" />
+              <StarOff className="h-4 w-4 text-muted-foreground/60" />
             )}
           </Button>
-          <span className="text-sm text-gray-400">Show</span>
+          <span className="text-sm text-muted-foreground">Show</span>
           <Select
             value={recommendationLimit.toString()}
             onValueChange={(value) => setRecommendationLimit(parseInt(value))}
@@ -327,79 +291,101 @@ export function PredictionDisplay({
             </SelectContent>
           </Select>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode(viewMode === 'json' ? 'cards' : 'json')}
+            className="gap-2"
+          >
+            {viewMode === 'json' ? (
+              <List className="h-4 w-4 text-muted-foreground/60" />
+            ) : (
+              <Code className="h-4 w-4 text-muted-foreground/60" />
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="h-[400px] bg-gray-800/50 rounded-lg">
-        {viewMode === 'json' ? (
-          <div className="relative h-full">
-            <div className="sticky top-0 right-0 p-2 bg-gray-800/50 z-10 border-b border-white/10">
-              <button
-                onClick={handleCopyToClipboard}
-                className="text-xs bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 px-2 py-1 rounded flex items-center gap-1"
-                disabled={!predictions}
-              >
-                {copied ? (
-                  <>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                    </svg>
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="p-4 overflow-auto h-[calc(400px-3rem)]">
-              <pre className="text-white font-mono text-sm">
-                {predictions ? JSON.stringify(predictions, null, 2) : 'No predictions available'}
-              </pre>
-            </div>
-          </div>
-        ) : (
-          <div className="h-full overflow-auto p-4">
-            <div className="space-y-3">
-              {detailsLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="h-6 w-6 animate-spin text-white" />
-                  <span className="ml-2 text-white">Loading song details...</span>
-                </div>
-              ) : predictions?.predictions && predictions.predictions.length > 0 ? (
-                predictions.predictions.map((prediction) => {
-                  const songDetail = songDetails[prediction.song_id];
-                  if (!songDetail) return null;
-                  
-                  return (
-                    <SongCard
-                      key={prediction.song_id}
-                      song={songDetail}
-                      className="bg-gray-800/50 hover:bg-gray-700/50"
-                      actionLabel={`Add to History (${(prediction.confidence * 100).toFixed(1)}% match)`}
-                      showAction={true}
-                      isCompact={true}
-                      onAction={() => onAddToHistory?.(songDetail)}
-                    />
-                  );
-                })
+      {loading ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-primary/40" />
+          <p className="text-sm text-muted-foreground">Generating predictions...</p>
+        </div>
+      ) : error ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <AlertCircle className="h-6 w-6 text-destructive/60" />
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      ) : viewMode === 'json' ? (
+        <div className="h-full flex-1 relative bg-muted/30 rounded-lg border border-border">
+          <div className="absolute right-3 top-3 z-10">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleCopyToClipboard}
+              className="h-8 px-3 gap-2 text-xs font-medium"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Copied
+                </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <Music2 className="h-12 w-12 text-gray-500/50" />
-                  <p className="text-gray-400 text-center">
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy
+                </>
+              )}
+            </Button>
+          </div>
+          <div className="absolute inset-0 overflow-auto rounded-lg pt-14 px-4 pb-4">
+            <pre className="h-full text-sm font-mono leading-relaxed">
+              <code className="block h-full text-foreground/90 whitespace-pre-wrap break-words">
+                {JSON.stringify(predictions, null, 2)}
+              </code>
+            </pre>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-auto">
+          <div className="space-y-3">
+            {detailsLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-primary/40" />
+                <span className="ml-2 text-muted-foreground">Loading song details...</span>
+              </div>
+            ) : predictions?.predictions && predictions.predictions.length > 0 ? (
+              predictions.predictions.map((prediction) => {
+                const songDetail = songDetails[prediction.song_id];
+                if (!songDetail) return null;
+                
+                return (
+                  <SongCard
+                    key={prediction.song_id}
+                    song={songDetail}
+                    onAction={() => onAddToHistory?.(songDetail)}
+                    actionLabel={`Add to History (${(prediction.confidence * 100).toFixed(1)}% match)`}
+                    showAction={true}
+                    isCompact={true}
+                  />
+                );
+              })
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
+                <Music2 className="h-12 w-12 text-muted-foreground/30" />
+                <div className="flex flex-col items-center">
+                  <p className="text-muted-foreground">
                     Your song predictions will appear here<br />
-                    once you add songs to your history
+                    <span className="text-sm text-muted-foreground/60">once you add songs to your history</span>
                   </p>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 } 

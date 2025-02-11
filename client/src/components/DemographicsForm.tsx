@@ -52,26 +52,27 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
 
   if (!isEditing && initialData) {
     return (
-      <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-lg text-gray-400 font-large">Age</label>
-            <p className="text-base text-white font-large">{initialData.age}</p>
+      <div className="space-y-4">
+        <h3 className="text-xl font-semibold text-foreground mb-4">Current Demographics</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-base text-muted-foreground font-medium">Age</label>
+            <p className="text-lg text-foreground font-semibold">{initialData.age}</p>
           </div>
-          <div>
-            <label className="text-lg text-gray-400 font-large">Gender</label>
-            <p className="text-base text-white font-large">{initialData.gender}</p>
+          <div className="space-y-1.5">
+            <label className="text-base text-muted-foreground font-medium">Gender</label>
+            <p className="text-lg text-foreground font-semibold">{initialData.gender}</p>
           </div>
-          <div>
-            <label className="text-lg text-gray-400 font-large">Location</label>
-            <p className="text-base text-white font-large">{initialData.location}</p>
+          <div className="space-y-1.5">
+            <label className="text-base text-muted-foreground font-medium">Location</label>
+            <p className="text-lg text-foreground font-semibold">{initialData.location}</p>
           </div>
-          <div>
-            <label className="text-lg text-gray-400 font-large">Occupation</label>
-            <p className="text-base text-white font-large">{initialData.occupation}</p>
+          <div className="space-y-1.5">
+            <label className="text-base text-muted-foreground font-medium">Occupation</label>
+            <p className="text-lg text-foreground font-semibold">{initialData.occupation}</p>
           </div>
         </div>
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-4">
           <Button
             variant="secondary"
             onClick={handleEditClick}
@@ -102,9 +103,12 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <h3 className="text-xl font-semibold text-foreground mb-4">
+        {initialData ? 'Edit Demographics' : 'Enter Your Demographics'}
+      </h3>
       <div className="space-y-5">
         <div className="space-y-2.5">
-          <label htmlFor="age" className="block text-lg font-medium text-white">
+          <label htmlFor="age" className="block text-base font-medium text-muted-foreground">
             Age
           </label>
           <Input
@@ -115,24 +119,24 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
             min={13}
             max={100}
             required
-            className="py-6 text-lg bg-background/80 border-accent/20"
+            className="py-6 text-lg bg-background border-border focus:border-primary"
           />
         </div>
 
         <div className="space-y-2.5">
-          <label htmlFor="gender" className="block text-lg font-medium text-white">
+          <label htmlFor="gender" className="block text-base font-medium text-muted-foreground">
             Gender
           </label>
           <Select.Select value={formData.gender} onValueChange={(value) => setFormData({...formData, gender: value})}>
-            <Select.Trigger className="w-full py-6 text-lg bg-background/80 border-accent/20">
+            <Select.Trigger className="w-full py-6 text-lg bg-background border-border">
               <span className="text-lg">{formData.gender || 'Select gender'}</span>
             </Select.Trigger>
-            <Select.Content className="bg-background/90 border border-accent/20">
+            <Select.Content className="bg-background border border-border">
               {genderOptions.map((option) => (
                 <Select.Option 
                   key={option} 
                   value={option}
-                  className="text-lg py-3 hover:bg-accent/20"
+                  className="text-lg py-3 hover:bg-accent"
                 >
                   {option}
                 </Select.Option>
@@ -142,19 +146,19 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
         </div>
 
         <div className="space-y-2.5">
-          <label htmlFor="location" className="block text-lg font-medium text-white">
+          <label htmlFor="location" className="block text-base font-medium text-muted-foreground">
             Location
           </label>
           <Select.Select value={formData.location} onValueChange={(value) => setFormData({...formData, location: value})}>
-            <Select.Trigger className="w-full py-6 text-lg bg-background/80 border-accent/20">
+            <Select.Trigger className="w-full py-6 text-lg bg-background border-border">
               <span className="text-lg">{formData.location || 'Select location'}</span>
             </Select.Trigger>
-            <Select.Content className="bg-background/90 border border-accent/20">
+            <Select.Content className="bg-background border border-border">
               {locations.map((location) => (
                 <Select.Option 
                   key={location} 
                   value={location}
-                  className="text-lg py-3 hover:bg-accent/20"
+                  className="text-lg py-3 hover:bg-accent"
                 >
                   {location}
                 </Select.Option>
@@ -164,19 +168,19 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
         </div>
 
         <div className="space-y-2.5">
-          <label htmlFor="occupation" className="block text-lg font-medium text-white">
+          <label htmlFor="occupation" className="block text-base font-medium text-muted-foreground">
             Occupation
           </label>
           <Select.Select value={formData.occupation} onValueChange={(value) => setFormData({...formData, occupation: value})}>
-            <Select.Trigger className="w-full py-6 text-lg bg-background/80 border-accent/20">
+            <Select.Trigger className="w-full py-6 text-lg bg-background border-border">
               <span className="text-lg">{formData.occupation || 'Select occupation'}</span>
             </Select.Trigger>
-            <Select.Content className="bg-background/90 border border-accent/20">
+            <Select.Content className="bg-background border border-border">
               {occupations.map((occupation) => (
                 <Select.Option 
                   key={occupation} 
                   value={occupation}
-                  className="text-lg py-3 hover:bg-accent/20"
+                  className="text-lg py-3 hover:bg-accent"
                 >
                   {occupation}
                 </Select.Option>
@@ -189,7 +193,7 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
       <div className="flex gap-4 mt-8">
         <Button 
           type="submit" 
-          className="flex-1 py-6 text-lg font-medium bg-primary/90 hover:bg-primary/100 text-primary-foreground transition-colors"
+          className="flex-1 py-6 text-lg font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
           size="lg"
         >
           {initialData ? 'Update Demographics' : 'Submit Demographics'}
@@ -201,7 +205,7 @@ export function DemographicsForm({ onSubmit, initialData, onForgetMe, onEditTogg
               setIsEditing(false);
               onEditToggle();
             }}
-            className="flex-1 py-6 text-lg font-medium bg-secondary/90 hover:bg-secondary text-secondary-foreground transition-colors"
+            className="flex-1 py-6 text-lg font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground transition-colors"
             size="lg"
             variant="secondary"
           >

@@ -252,4 +252,28 @@ def get_demographics(current_user):
         return jsonify({
             'error': 'Server error',
             'details': str(e)
+        }), 500
+
+@user_bp.route('/anonymize', methods=['POST'])
+@session_user
+def anonymize_user(current_user):
+    """Anonymize user data and create a new session"""
+    try:
+        user_id = str(current_user['_id'])
+        
+        # Anonymize user data and get new session user ID
+        new_user_id = db_service.anonymize_user_data(user_id)
+        
+        return jsonify({
+            'message': 'User data anonymized successfully',
+            'new_user_id': new_user_id
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in anonymize_user: {error_details}")  # Log the full error
+        return jsonify({
+            'error': 'Server error',
+            'details': str(e)
         }), 500 

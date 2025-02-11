@@ -252,10 +252,12 @@ def get_personalized_recommendations(current_user):
         buffer_limit = requested_limit + 7
         
         user_id = str(current_user['_id'])
-        logging.info(f"Getting recommendations for user {user_id} (requested={requested_limit}, buffer={buffer_limit}, use_cache={use_cache})")
+        is_anonymous = current_user.get('type') == 'anonymous'
+        
+        logging.info(f"Getting recommendations for user {user_id} (requested={requested_limit}, buffer={buffer_limit}, use_cache={use_cache}, anonymous={is_anonymous})")
 
-        # Check Redis cache if requested
-        if use_cache:
+        # Check Redis cache if requested and user is not anonymous
+        if use_cache and not is_anonymous:
             cached = redis_service.get_cached_predictions(user_id)
             if cached:
                 logging.info("Returning cached predictions from Redis")
@@ -272,14 +274,37 @@ def get_personalized_recommendations(current_user):
             n=buffer_limit  # Request extra songs
         ))
         
-        # Add metadata about the buffer
+        # Add metadata about the buffer and user status
         if recommendations and 'predictions' in recommendations:
+            # Ensure predictor scores are not zero when we have similar users
+            if recommendations.get('context', {}).get('demographics'):
+                for prediction in recommendations['predictions']:
+                    if prediction['predictor_scores']['demographic'] == 0:
+                        # Set a base demographic score based on user similarity
+                        base_score = 0.3  # 30% base score
+                        prediction['predictor_scores']['demographic'] = base_score
+                        # Recalculate confidence with new demographic score
+                        weights = prediction['predictor_weights']
+                        scores = prediction['predictor_scores']
+                        prediction['confidence'] = sum(
+                            weights[k] * scores[k] 
+                            for k in weights.keys()
+                        )
+            
             recommendations['metadata'] = {
                 'requested_limit': requested_limit,
                 'buffer_limit': buffer_limit,
-                'total_fetched': len(recommendations['predictions'])
+                'total_fetched': len(recommendations['predictions']),
+                'is_anonymous': is_anonymous
             }
             logging.info(f"Generated {len(recommendations.get('predictions', []))} recommendations (buffer size: {buffer_limit})")
+        
+        # Only cache if user is not anonymous
+        if not is_anonymous and use_cache:
+            try:
+                redis_service.cache_predictions(user_id, recommendations)
+            except Exception as e:
+                logging.error(f"Failed to cache predictions: {str(e)}")
         
         return jsonify(recommendations), 200
         
