@@ -212,13 +212,13 @@ class DemographicPredictor:
             if user_history is None or user_history.empty:
                 logging.info(f"No listening history found for user {user_id} or its variants")
                 continue
-
-            # Process user's history
-            found_history = True
-            user_songs = set(str(song_id) for song_id in user_history['song_id'])
-            for song_id in user_songs:
-                if song_id in song_weights:
-                    song_weights[song_id] += similarity
+            else:
+                # Process user's history
+                found_history = True
+                user_songs = set(str(song_id) for song_id in user_history['song_id'])
+                for song_id in user_songs:
+                    if song_id in song_weights:
+                        song_weights[song_id] += similarity
 
         # If no history found for any similar user, assign base scores
         if not found_history:

@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 import pickle
 import logging
 from typing import Dict, List, Any, Optional
+import ast
 from collections import defaultdict
 from datetime import datetime
 from application.models.fma_dataset_processor import FMADatasetProcessor
@@ -55,7 +56,7 @@ class ConfidenceCalculator:
             self.diversity_weight * diversity_factor
         )
         
-        return min(1.0, max(0.0, confidence)) #Ensure confidence is between 0 and 1
+        return min(1.0, max(0.0, confidence)) # 0 < confidence < 1
     
     def _calculate_history_factor(self, history_length: int) -> float:
         """
@@ -68,7 +69,7 @@ class ConfidenceCalculator:
         divide by log(50) to normalize the history length, because the max history length is 50 songs.
         """
 
-        return min(1.0, np.log1p(history_length) / np.log(50)) # Ensure history factor is between 0 and 1
+        return min(1.0, np.log1p(history_length) / np.log(50)) # 0< hf < 1
     
     def _calculate_embedding_factor(
         self,
@@ -80,7 +81,7 @@ class ConfidenceCalculator:
         Uses normalized cosine similarity between user and song embeddings.
         
         Mathematical formulation:
-        1. Normalize embeddings: e_norm = e / ||e|| -> unit vector embeddings
+        1. Normalize embeddings: e_norm = e /||e|| -> unit vector embeddings
         2. Calculate cosine similarity: cos_sim = (u_norm · s_norm) -> dot product of the unit vector embeddings
         3. Scale to [0,1]: similarity = (cos_sim + 1) / 2 -> scale to 0-1
         where:
@@ -144,20 +145,17 @@ class WeightedEnsembleRecommender:
         self.confidence_calculator = ConfidenceCalculator()
         self.prediction_sources = {
             'model': None,  # Will be set to MusicRecommender instance
-            'demographic': None,
-            'popularity': None  
+            'demographic': None, # Will be set to DemographicPredictor instance
+            'popularity': None  #Will be set to PopularityPredictor instance
         }
         
     def set_model_predictor(self, model_predictor: 'MusicRecommender'):
-        """Set the main model predictor."""
         self.prediction_sources['model'] = model_predictor
 
     def set_demographic_predictor(self, demographic_predictor: 'DemographicPredictor'):
-        """Set the demographic predictor."""
         self.prediction_sources['demographic'] = demographic_predictor
 
     def set_popularity_predictor(self, popularity_predictor: 'PopularityPredictor'):
-        """Set the popularity predictor."""
         self.prediction_sources['popularity'] = popularity_predictor
         
     async def get_recommendations(
@@ -180,7 +178,7 @@ class WeightedEnsembleRecommender:
         
         # Get predictions from each source
         for source_name, predictor in self.prediction_sources.items():
-            # srouce_names -> Model, Demographic, Popularity
+            # source_names -> Model, Demographic, Popularity
             if predictor is not None:
                 try:
                     preds = await self._get_source_predictions(predictor, user_id, user_context)
@@ -199,9 +197,9 @@ class WeightedEnsembleRecommender:
         
         # Get top N recommendations
         top_n = sorted(
-            blended_scores.items(),
-            key=lambda x: x[1]['score'],
-            reverse=True
+            blended_scores.items(), # For each song, get the song_id and the data
+            key=lambda x: x[1]['score'], # Rank by score
+            reverse=True # highest -> lowest
         )[:n]
         
         return [{
@@ -230,7 +228,6 @@ class WeightedEnsembleRecommender:
         """
         Blend predictions from multiple sources using confidence scores as weights.
         
-        Mathematical process:
         1. Normalize confidence scores to get weights:
            w_j = conf_j / Σ(conf_k)
         2. For each song, calculate weighted score:
@@ -281,14 +278,15 @@ class MusicRecommender(nn.Module):
         self.song_embedding = nn.Embedding(num_songs, embedding_dim)
         
         # Process metadata first to reduce dimensionality
+
         self.metadata_reducer = nn.Sequential(
-            nn.Linear(metadata_dim, embedding_dim),
-            nn.ReLU(),
-            nn.Dropout(0.2)
+            nn.Linear(metadata_dim, embedding_dim), # make the metadata dimension the same as the embedding dimension
+            nn.ReLU(), # introduce non-linearity
+            nn.Dropout(0.2) # prevent overfitting
         )
         
         # Calculate total input dimension
-        total_input_dim = embedding_dim * 3 + demographic_dim  # user_emb + song_emb + metadata_emb + demographics
+        total_input_dim = embedding_dim * 3 + demographic_dim  # (user_emb + song_emb + metadata_emb) = emb_dim + demographics
         
         logging.info(f"Total input dimension: {total_input_dim}")
         
@@ -296,10 +294,10 @@ class MusicRecommender(nn.Module):
         self.network = nn.Sequential(
             # First layer: reduce to 128
             nn.Linear(total_input_dim, 128),
-            nn.LayerNorm(128),
+            nn.LayerNorm(128), # normalize the input
             nn.ReLU(),
             nn.Dropout(0.2),
-            
+
             # Second layer: reduce to 64
             nn.Linear(128, 64),
             nn.LayerNorm(64),
@@ -368,11 +366,12 @@ class MusicRecommender(nn.Module):
         
         # Concatenate all inputs along feature dimension
         combined = torch.cat([
-            user_embedded,
-            song_embedded,
-            metadata_embedded,
-            demographic_input
-        ], dim=1)
+            user_embedded, # (emb_dim, batch_size)
+            song_embedded, # (emb_dim, batch_size)
+            metadata_embedded, # (emb_dim, batch_size)
+            demographic_input # (demographic_dim, batch_size)
+        ], dim=1  # concatenate along batch_size dimension
+        )
         
         logging.debug(f"Combined shape: {combined.shape}")
         
@@ -502,10 +501,18 @@ class RecommenderSystem:
                         user_songs = set(user_history['song_encoded'].values)
                         all_songs = set(range(max(listening_history['song_encoded']) + 1))
                         available_songs = list(all_songs - user_songs)
+
+                        """
+                        Negative samples are anti-theses to positive samples: our user(s) never actually listened to these songs, we're adding them to show the Neural Network that, presumably, "this is what the user didn't like."
+                        There is one 'negative interaction' for every positive interaction. So, each user has 2x numbers of interactions, if the interactions per user parameter = x. Negative sample songs are taken from the complementary set of songs in listening history
+                            set(ns[songs]) = U - {set(listening_history[songs])}    
+                                ^negative samples      ^positive samples
+                        The labels array is a boolean array (has either 0, 1). 0 -> Negative Sample; 1 -> Positive Sample
+                        """
                         
                         if available_songs:
                             negative_song = int(np.random.choice(available_songs))
-                            negative_song_id = int(self.song_encoder.inverse_transform([negative_song])[0])
+                            negative_song_id = int(self.song_encoder.inverse_transform([negative_song])[0]) # Reverse what we did while transforming the song_id on line ~690
                             negative_metadata = self.get_song_metadata(negative_song_id)
                             
                             if negative_metadata is not None:
@@ -563,7 +570,9 @@ class RecommenderSystem:
             genres = metadata['genres']
             if isinstance(genres, list) and len(genres) > 0:
                 for i, genre in enumerate(genres[:10]):  # Use first 10 genres
-                    vector[i] = hash(str(genre)) % 2  # Convert genre to binary feature
+                    # Use a deterministic hash with a fixed seed
+                    genre_hash = hash(str(genre) + "genre_seed_42") % 2  # Fixed seed for reproducibility
+                    vector[i] = genre_hash
                     
             # Process tags (next 20 dimensions)
             tags = metadata['tags']
@@ -577,8 +586,8 @@ class RecommenderSystem:
             
             # One-hot encode top genre (remaining dimensions)
             genre_top = str(metadata['genre_top'])
-            genre_hash = hash(genre_top) % 23  # Use 23 dimensions for top genre
-            vector[41 + genre_hash] = 1
+            genre_hash = hash(f'{genre_top} genre_seed_42') % 23  # Use 23 dimensions for top genre, 0 < genre_hash < 22
+            vector[41 + genre_hash] = 1 # Set the corresponding dimension to 1
             
         except Exception as e:
             logging.warning(f"Error converting metadata to vector: {str(e)}")
@@ -678,7 +687,7 @@ class RecommenderSystem:
                         logging.info(f"Batch demographics: {batch_demographics.shape}")
                         logging.info(f"Batch labels: {batch_labels.shape}")
                     
-                    optimizer.zero_grad()
+                    optimizer.zero_grad() # Reset gradient
                     predictions = self.model(
                         batch_users,
                         batch_songs,
@@ -810,13 +819,14 @@ class RecommenderSystem:
             metadata_features = pd.DataFrame(index=tracks_data.index)
             
             # Process genres (convert string representation to list)
+            # Process genres (convert string representation to list)
             metadata_features['genres'] = tracks_data['track_genres'].apply(
-                lambda x: eval(x) if isinstance(x, str) else []
+                lambda x: ast.literal_eval(x) if isinstance(x, str) else []
             )
             
-            # Process tags (convert string representation to list)
+            # Process tags (convert string representation to list)  
             metadata_features['tags'] = tracks_data['track_tags'].apply(
-                lambda x: eval(x) if isinstance(x, str) else []
+                lambda x: ast.literal_eval(x) if isinstance(x, str) else []
             )
             
             # Add basic metadata
