@@ -1,6 +1,17 @@
-version: '3.8'
 
 services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+      - "3001:3001"
+    environment:
+      FLASK_APP: application
+      FLASK_ENV: development
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
   postgres:
     image: postgres:16-alpine
     environment:
@@ -52,4 +63,4 @@ services:
 volumes:
   postgres_data:
   mongodb_data:
-  redis_data: 
+  redis_data:
